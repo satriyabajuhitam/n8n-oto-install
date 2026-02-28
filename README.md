@@ -491,5 +491,3 @@ docker system df                     # Docker storage
 MIT License — feel free to use for personal and commercial projects.
 
 ---
-
-**Author:** [@automator](https://t.me/automator)
