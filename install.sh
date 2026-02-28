@@ -355,7 +355,7 @@ cat > "$INSTALL_DIR/Dockerfile.n8n" << 'DEOF'
 # ============================================================
 
 # ─── STAGE 1: Builder ──────────────────────────────────────
-FROM alpine:3.22 AS builder
+FROM alpine:3.21 AS builder
 
 RUN apk add --no-cache \
     bash curl wget git make g++ gcc \
@@ -367,13 +367,13 @@ RUN apk add --no-cache \
     poppler-utils \
     tesseract-ocr tesseract-ocr-data-rus tesseract-ocr-data-eng \
     jq apache2-utils \
-    fontconfig ttf-freefont \
-    docker-cli
+    fontconfig ttf-freefont
 
 # Pack tools into tar (follow symlinks with -h)
-RUN mkdir -p /export && tar chf /export/tools.tar \
+RUN PYTHON_VER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')") && \
+    mkdir -p /export && tar chf /export/tools.tar \
     /usr/bin/ffmpeg /usr/bin/ffprobe \
-    /usr/bin/python3 /usr/bin/python3.12 \
+    /usr/bin/python3 /usr/bin/python3.${PYTHON_VER} \
     /usr/bin/chromium-browser /usr/lib/chromium/ \
     /usr/bin/chromedriver \
     /usr/bin/convert /usr/bin/magick /usr/bin/identify \
@@ -381,10 +381,9 @@ RUN mkdir -p /export && tar chf /export/tools.tar \
     /usr/bin/pdftotext /usr/bin/pdftoppm \
     /usr/bin/tesseract \
     /usr/bin/jq /usr/bin/htpasswd \
-    /usr/bin/docker \
     /usr/bin/git \
     /usr/lib/lib*.so* \
-    /usr/lib/python3.12/ \
+    /usr/lib/python3.${PYTHON_VER}/ \
     /usr/lib/tesseract-ocr/ \
     /usr/share/tessdata/ \
     /usr/share/fonts/ \
@@ -639,7 +638,7 @@ services:
   # Traefik v3 — Reverse Proxy + SSL
   # ──────────────────────────────────────────────────────────
   n8n-traefik:
-    image: traefik:latest
+    image: traefik:v3.3
     container_name: n8n-traefik
     restart: unless-stopped
     command:
@@ -830,9 +829,12 @@ bot.onText(/\/restart/, async (msg) => {
 });
 
 // /update
+let isUpdating = false;
 bot.onText(/\/update/, async (msg) => {
     if (!auth(msg)) return;
     const cid = msg.chat.id;
+    if (isUpdating) { bot.sendMessage(cid, '\u23f3 Update already in progress, please wait...'); return; }
+    isUpdating = true;
     try {
         await bot.sendMessage(cid, '🔍 Checking versions...');
         let cur = 'unknown', lat = 'unknown';
@@ -863,6 +865,7 @@ bot.onText(/\/update/, async (msg) => {
         const s = await run('docker ps --filter name=^n8n$ --format "{{.Status}}"').catch(() => '?');
         bot.sendMessage(cid, `✅ *Updated!*\n\n📦 Old: ${cur}\n🆕 New: ${nv}\n📊 ${s.trim()}`, { parse_mode: 'Markdown' });
     } catch (e) { bot.sendMessage(cid, `❌ ${e.message}\n\nManual: \`cd ${N8N_DIR} && ./update_n8n.sh\``, { parse_mode: 'Markdown' }); }
+    finally { isUpdating = false; }
 });
 
 // /backup
@@ -1004,7 +1007,7 @@ echo "Stopping..."
 docker compose stop n8n n8n-worker
 
 echo "Rebuilding..."
-docker compose build --pull --no-cache n8n
+docker compose build --pull n8n
 
 echo "Starting..."
 docker compose up -d n8n n8n-worker
