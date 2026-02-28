@@ -644,6 +644,8 @@ services:
     restart: unless-stopped
     command:
       - "--api.dashboard=false"
+      - "--ping=true"
+      - "--entrypoints.traefik.address=:8080"
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
       - "--entrypoints.web.address=:80"
@@ -664,10 +666,11 @@ services:
     networks:
       - n8n-net
     healthcheck:
-      test: ["CMD", "traefik", "healthcheck"]
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/ping"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 10s
 
   # ──────────────────────────────────────────────────────────
   # Telegram Bot
