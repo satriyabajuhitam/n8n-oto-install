@@ -10,7 +10,7 @@ Complete one-click automatic installation of n8n 2.x on clean Ubuntu 22.04 / 24.
 | **n8n-worker** | latest | Worker for queue mode |
 | **PostgreSQL** | 16-alpine | Database |
 | **Redis** | 7-alpine | Cache and task queue |
-| **Traefik** | latest | Reverse proxy + SSL |
+| **Traefik** | v3.3 | Reverse proxy + SSL |
 | **Telegram Bot** | Node 20 | Server management |
 
 ### Tools built into the n8n image
@@ -34,7 +34,7 @@ Complete one-click automatic installation of n8n 2.x on clean Ubuntu 22.04 / 24.
 
 ## 🎯 Installation
 
-### One-click`
+### One-click
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/satriyabajuhitam/n8n-oto-install/main/install.sh)
@@ -61,7 +61,7 @@ sudo bash install.sh
 - PostgreSQL Password
 - n8n Encryption Key (64 hex characters)
 - Redis Password
-- Timezone: Europe/Moscow (can be changed in `.env` after installation)
+- Timezone: Asia/Jakarta (can be changed in `.env` after installation)
 
 ## 📁 Project Structure
 
@@ -208,6 +208,8 @@ Or via Telegram: `/backup`
 
 **Encryption:** if `N8N_ENCRYPTION_KEY` is set in `.env`, the backup is encrypted using AES-256-CBC.
 
+> ⚠️ **Important:** The `N8N_ENCRYPTION_KEY` is required to decrypt backups. If you lose this key, encrypted backups cannot be recovered. Always keep a copy of your `.env` file in a safe place.
+
 ### Automatic Backups
 
 Configured during installation via cron — daily at 2:00.
@@ -291,7 +293,7 @@ Internet
     ▼
 ┌─────────┐
 │ Traefik │ :80 / :443 (SSL Let's Encrypt)
-│  latest   │
+│   v3.3  │
 └────┬────┘
      │
      └── n8n.example.com → n8n :5678
@@ -371,6 +373,19 @@ ssh -L 6379:localhost:6379 user@server
 cd /opt/automator/n8n
 docker compose logs n8n --tail 50
 docker compose ps
+```
+
+### Traefik Unhealthy
+
+```bash
+# Check Traefik health status
+docker inspect n8n-traefik --format='{{json .State.Health.Status}}'
+
+# Check Traefik ping endpoint (should return 200)
+docker exec n8n-traefik wget -qO- http://localhost:8080/ping
+
+# Traefik logs
+docker compose logs n8n-traefik --tail 30
 ```
 
 ### SSL Certificates Not Issued
@@ -461,8 +476,8 @@ docker compose down && docker compose up -d  # Full restart
 ./restore_n8n.sh backups/FILE        # Restore
 ls -lhrt backups/                    # List backups
 
-# ─── Passwords ─────────────────────────────
-grep PASSWORD .env                   # All passwords
+# ─── Passwords / Secrets ─────────────────────────────
+grep -E 'PASSWORD|KEY|TOKEN' .env      # All secrets
 
 # ─── Diagnostics ────────────────────────
 docker stats                         # Resources
@@ -478,5 +493,3 @@ MIT License — feel free to use for personal and commercial projects.
 ---
 
 **Author:** [@automator](https://t.me/automator)
-**Channel:** [Automations and Scenarios](https://t.me/+p3VDHRpArOc5YzM6)
-**Support:** [Boosty](https://boosty.to/automator)
