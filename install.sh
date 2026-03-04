@@ -17,6 +17,8 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
+MAGENTA='\033[0;35m'
+DIM='\033[2m'
 BOLD='\033[1m'
 NC='\033[0m'
 
@@ -24,13 +26,44 @@ log_info()    { echo -e "${BLUE}[INFO]${NC}  $(date '+%H:%M:%S') $1"; }
 log_ok()      { echo -e "${GREEN}[OK]${NC}    $(date '+%H:%M:%S') $1"; }
 log_warn()    { echo -e "${YELLOW}[WARN]${NC}  $(date '+%H:%M:%S') $1"; }
 log_error()   { echo -e "${RED}[ERROR]${NC} $(date '+%H:%M:%S') $1"; }
-log_step()    { echo -e "\n${CYAN}${BOLD}═══ $1 ═══${NC}\n"; }
+log_step() {
+    local title="$1"
+    local width=52
+    local line; line=$(printf '─%.0s' $(seq 1 $width))
+    echo ""
+    echo -e "${CYAN}${BOLD}┌${line}┐${NC}"
+    printf "${CYAN}${BOLD}│${NC}  %-${width}s${CYAN}${BOLD}│${NC}\n" "$title"
+    echo -e "${CYAN}${BOLD}└${line}┘${NC}"
+    echo ""
+}
+
+# ─── Spinner (run in background, call after launching a background job) ────
+spinner() {
+    local msg="${1:-Working...}"
+    local frames=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
+    local i=0
+    while kill -0 "$SPINNER_PID" 2>/dev/null; do
+        echo -ne "\r  ${CYAN}${frames[$i]}${NC}  ${msg}"
+        i=$(( (i+1) % ${#frames[@]} ))
+        sleep 0.12
+    done
+    echo -ne "\r$(printf ' %.0s' $(seq 1 $((${#msg}+8))))\r"
+}
+
+# ─── Timer ─────────────────────────────────────────────────────
+START_TIME=$(date +%s)
 
 # ─── Error Trap ──────────────────────────────────────────
 trap 'log_error "Script interrupted at line $LINENO. Last command: $BASH_COMMAND"' ERR
 
 # ─── Installation Directory ────────────────────────────────────
 INSTALL_DIR="/opt/automator/n8n"
+
+# ─── Persistent Log File ───────────────────────────────────────
+mkdir -p /var/log
+LOG_FILE="/var/log/n8n_install_$(date +%Y%m%d_%H%M%S).log"
+exec > >(tee -a "$LOG_FILE") 2>&1
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] Install log started → $LOG_FILE"
 
 # ============================================================
 # PREFLIGHT CHECKS
@@ -84,30 +117,41 @@ echo ""
 # ============================================================
 # INPUT DATA
 # ============================================================
-log_step "Configuration settings"
+log_step "Configuration  ─  Step 0/11"
 
 # --- 1. n8n Domain ---
-read -p "Domain for n8n (e.g., n8n.example.com): " DOMAIN
+echo -e "  ${BOLD}[1/4] Domain${NC}  ${DIM}(e.g. n8n.example.com)${NC}"
+echo -e "  ${RED}●${NC} Required — must have a valid DNS A-record pointing to this server"
+read -p "  → Domain: " DOMAIN
 while [[ -z "$DOMAIN" ]]; do
     log_error "Domain cannot be empty"
-    read -p "Domain for n8n: " DOMAIN
+    read -p "  → Domain: " DOMAIN
 done
+echo ""
 
 # --- 2. Email ---
-read -p "Email for SSL certificate: " EMAIL
+echo -e "  ${BOLD}[2/4] Email${NC}  ${DIM}(used for Let's Encrypt SSL certificate)${NC}"
+echo -e "  ${RED}●${NC} Required"
+read -p "  → Email: " EMAIL
 while ! echo "$EMAIL" | grep -qE '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'; do
-    log_error "Invalid email"
-    read -p "Email: " EMAIL
+    log_error "Invalid email format. Example: user@example.com"
+    read -p "  → Email: " EMAIL
 done
+echo ""
 
 # --- 3. Telegram Bot Token ---
-echo ""
-read -p "Telegram Bot Token (from @BotFather, Enter to skip): " TG_BOT_TOKEN
+echo -e "  ${BOLD}[3/4] Telegram Bot Token${NC}  ${DIM}(obtain from @BotFather on Telegram)${NC}"
+echo -e "  ${YELLOW}○${NC} Optional — press Enter to skip, can be added later in .env"
+read -p "  → Bot Token: " TG_BOT_TOKEN
 TG_BOT_TOKEN="${TG_BOT_TOKEN:-}"
+echo ""
 
 # --- 4. Telegram User ID ---
-read -p "Telegram User ID (from @userinfobot, Enter to skip): " TG_USER_ID
+echo -e "  ${BOLD}[4/4] Telegram User ID${NC}  ${DIM}(obtain from @userinfobot on Telegram)${NC}"
+echo -e "  ${YELLOW}○${NC} Optional — press Enter to skip"
+read -p "  → User ID: " TG_USER_ID
 TG_USER_ID="${TG_USER_ID:-}"
+echo ""
 
 if [[ -z "$TG_BOT_TOKEN" ]] || [[ -z "$TG_USER_ID" ]]; then
     log_warn "Telegram bot not configured (can be added later in .env)"
@@ -131,21 +175,32 @@ PROXY_URL=""
 # ============================================================
 # CONFIRMATION
 # ============================================================
+
+# Detect public IP
+PUBLIC_IP=$(curl -sf --max-time 5 https://api.ipify.org || \
+            curl -sf --max-time 5 https://ifconfig.me || \
+            echo "not detected")
+
 echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo -e "${BOLD}Installation parameters:${NC}"
+echo -e "${CYAN}${BOLD}┌──────────────────────────────────────────────────────┐${NC}"
+echo -e "${CYAN}${BOLD}│${NC}            ${BOLD}Installation Summary${NC}              ${CYAN}${BOLD}│${NC}"
+echo -e "${CYAN}${BOLD}├──────────────────────────────────────────────────────┤${NC}"
+printf "${CYAN}${BOLD}│${NC}  %-16s ${CYAN}%-33s${NC} ${CYAN}${BOLD}│${NC}\n" "Domain" "https://${DOMAIN}"
+printf "${CYAN}${BOLD}│${NC}  %-16s %-33s ${CYAN}${BOLD}│${NC}\n" "SSL Email" "${EMAIL}"
+printf "${CYAN}${BOLD}│${NC}  %-16s %-33s ${CYAN}${BOLD}│${NC}\n" "Timezone" "${TIMEZONE}"
+if [ -n "$TG_BOT_TOKEN" ]; then
+    printf "${CYAN}${BOLD}│${NC}  %-16s ${GREEN}%-33s${NC} ${CYAN}${BOLD}│${NC}\n" "Telegram Bot" "✅ Enabled"
+else
+    printf "${CYAN}${BOLD}│${NC}  %-16s ${YELLOW}%-33s${NC} ${CYAN}${BOLD}│${NC}\n" "Telegram Bot" "⏭ Skipped"
+fi
+printf "${CYAN}${BOLD}│${NC}  %-16s %-33s ${CYAN}${BOLD}│${NC}\n" "Directory" "${INSTALL_DIR}"
+printf "${CYAN}${BOLD}│${NC}  %-16s %-33s ${CYAN}${BOLD}│${NC}\n" "Server IP" "${PUBLIC_IP}"
+echo -e "${CYAN}${BOLD}├──────────────────────────────────────────────────────┤${NC}"
+echo -e "${CYAN}${BOLD}│${NC}  ${YELLOW}⚠  DNS A-record for ${DOMAIN} must point to ${PUBLIC_IP}${NC}"
+echo -e "${CYAN}${BOLD}└──────────────────────────────────────────────────────┘${NC}"
 echo ""
-echo -e "  n8n Domain:      ${CYAN}https://${DOMAIN}${NC}"
-echo -e "  SSL Email:       ${EMAIL}"
-echo -e "  Timezone:        ${TIMEZONE}"
-echo -e "  Telegram Bot:    $([ -n "$TG_BOT_TOKEN" ] && echo "✅" || echo "❌ skipped")"
-echo -e "  Directory:       ${INSTALL_DIR}"
-echo ""
-echo -e "  ${YELLOW}⚠ DNS A-record for your domain must point to this server${NC}"
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-read -p "Start installation? (y/n): " -r
-[[ ! $REPLY =~ ^[Yy]$ ]] && { echo "Cancelled."; exit 0; }
+read -p "  Start installation? (y/n): " -r
+[[ ! $REPLY =~ ^[Yy]$ ]] && { echo "  Cancelled."; exit 0; }
 
 # ============================================================
 # 1. SYSTEM UPDATE
@@ -1143,17 +1198,25 @@ log_ok "Utilities: backup_n8n.sh, update_n8n.sh, restore_n8n.sh"
 # ============================================================
 # 10. BUILD IMAGES
 # ============================================================
-log_step "10/11 · Building Docker images"
+log_step "10/11 · Building Docker images  ⏱ ~5-15 min"
 
 cd "$INSTALL_DIR"
 
 log_info "Cleaning Docker build cache..."
 docker builder prune -af 2>/dev/null || true
 
-log_info "Building n8n (may take 5-15 minutes)..."
-docker compose build --no-cache 2>&1 | tail -5
+log_info "Building n8n custom image (this may take 5-15 minutes)..."
+docker compose build --no-cache 2>&1 &
+SPINNER_PID=$!
+spinner "Building Docker images — please wait..."
+wait $SPINNER_PID
+BUILD_EXIT=$?
+if [ $BUILD_EXIT -ne 0 ]; then
+    log_error "Docker build failed (exit code $BUILD_EXIT)"
+    exit 1
+fi
 
-log_ok "All images built"
+log_ok "All images built successfully"
 
 # ============================================================
 # 11. START
@@ -1162,21 +1225,25 @@ log_step "11/11 · Starting containers"
 
 docker compose up -d
 
-# Wait for n8n healthcheck
-log_info "Waiting for n8n status (up to 120 seconds)..."
+# Wait for n8n healthcheck  
+log_info "Waiting for n8n to become healthy (up to 120 seconds)..."
 N8N_OK=false
+HC_FRAMES=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
+HC_IDX=0
 for i in {1..60}; do
     sleep 2
     if docker exec n8n wget --spider -q http://localhost:5678/healthz 2>/dev/null; then
+        echo -ne "\r$(printf ' %.0s' $(seq 1 60))\r"
         N8N_OK=true
         break
     fi
-    echo -n "."
+    echo -ne "\r  ${CYAN}${HC_FRAMES[$HC_IDX]}${NC}  Waiting for n8n... ${DIM}(${i}/60)${NC}"
+    HC_IDX=$(( (HC_IDX + 1) % ${#HC_FRAMES[@]} ))
 done
 echo ""
 
 if $N8N_OK; then
-    log_ok "n8n is running and responding!"
+    log_ok "n8n is up and responding!"
 else
     log_warn "n8n did not respond within 120 seconds. Check: docker compose logs n8n"
 fi
@@ -1210,30 +1277,35 @@ fi
 # ============================================================
 # FINAL SUMMARY
 # ============================================================
+
+# Calculate elapsed time
+END_TIME=$(date +%s)
+ELAPSED=$(( END_TIME - START_TIME ))
+ELAPSED_FMT="$((ELAPSED/60))m $((ELAPSED%60))s"
+
 echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo -e "${GREEN}${BOLD}  ✅ INSTALLATION COMPLETED!${NC}"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
-echo -e "  ${BOLD}🌐 n8n:${NC}  ${CYAN}https://${DOMAIN}${NC}"
-echo ""
-echo -e "  ${BOLD}📦 Versions:${NC}"
-echo -e "     n8n:              v${N8N_VER}"
-echo -e "     PostgreSQL:       16"
-echo -e "     Redis:            7"
-echo -e "     Traefik:          latest"
-echo ""
-echo -e "  ${BOLD}📝 Commands:${NC}"
-echo "     cd $INSTALL_DIR"
-echo "     docker compose ps           # Status"
-echo "     docker compose logs -f n8n  # Logs"
-echo "     ./update_n8n.sh             # Update"
-echo "     ./backup_n8n.sh             # Backup"
-echo "     ./restore_n8n.sh <file>     # Restore"
-echo ""
-echo -e "  ${BOLD}📁 All passwords saved in:${NC} ${INSTALL_DIR}/.env"
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo -e "${GREEN}${BOLD}┌──────────────────────────────────────────────────────┐${NC}"
+echo -e "${GREEN}${BOLD}│${NC}         ${GREEN}${BOLD}✅  INSTALLATION COMPLETED!${NC}              ${GREEN}${BOLD}│${NC}"
+echo -e "${GREEN}${BOLD}├──────────────────────────────────────────────────────┤${NC}"
+printf  "${GREEN}${BOLD}│${NC}  %-20s ${CYAN}%-31s${NC} ${GREEN}${BOLD}│${NC}\n" "🌐 n8n URL" "https://${DOMAIN}"
+printf  "${GREEN}${BOLD}│${NC}  %-20s %-31s ${GREEN}${BOLD}│${NC}\n" "📦 n8n version" "v${N8N_VER}"
+printf  "${GREEN}${BOLD}│${NC}  %-20s %-31s ${GREEN}${BOLD}│${NC}\n" "🗄  PostgreSQL" "16"
+printf  "${GREEN}${BOLD}│${NC}  %-20s %-31s ${GREEN}${BOLD}│${NC}\n" "⚡ Redis" "7"
+printf  "${GREEN}${BOLD}│${NC}  %-20s %-31s ${GREEN}${BOLD}│${NC}\n" "🔒 Traefik" "latest"
+printf  "${GREEN}${BOLD}│${NC}  %-20s %-31s ${GREEN}${BOLD}│${NC}\n" "🖥  Server IP" "${PUBLIC_IP}"
+printf  "${GREEN}${BOLD}│${NC}  %-20s %-31s ${GREEN}${BOLD}│${NC}\n" "⏱  Total time" "${ELAPSED_FMT}"
+echo -e "${GREEN}${BOLD}├──────────────────────────────────────────────────────┤${NC}"
+echo -e "${GREEN}${BOLD}│${NC}  ${BOLD}Useful commands:${NC}                                   ${GREEN}${BOLD}│${NC}"
+printf  "${GREEN}${BOLD}│${NC}    %-50s ${GREEN}${BOLD}│${NC}\n" "cd ${INSTALL_DIR}"
+printf  "${GREEN}${BOLD}│${NC}    ${DIM}%-50s${NC} ${GREEN}${BOLD}│${NC}\n" "docker compose ps"
+printf  "${GREEN}${BOLD}│${NC}    ${DIM}%-50s${NC} ${GREEN}${BOLD}│${NC}\n" "docker compose logs -f n8n"
+printf  "${GREEN}${BOLD}│${NC}    ${DIM}%-50s${NC} ${GREEN}${BOLD}│${NC}\n" "./update_n8n.sh"
+printf  "${GREEN}${BOLD}│${NC}    ${DIM}%-50s${NC} ${GREEN}${BOLD}│${NC}\n" "./backup_n8n.sh"
+printf  "${GREEN}${BOLD}│${NC}    ${DIM}%-50s${NC} ${GREEN}${BOLD}│${NC}\n" "./restore_n8n.sh <backup_file>"
+echo -e "${GREEN}${BOLD}├──────────────────────────────────────────────────────┤${NC}"
+printf  "${GREEN}${BOLD}│${NC}  📁 Passwords: %-37s ${GREEN}${BOLD}│${NC}\n" "${INSTALL_DIR}/.env"
+printf  "${GREEN}${BOLD}│${NC}  📋 Install log: %-35s ${GREEN}${BOLD}│${NC}\n" "${LOG_FILE}"
+echo -e "${GREEN}${BOLD}└──────────────────────────────────────────────────────┘${NC}"
 echo ""
 
 # Container Status
