@@ -540,8 +540,6 @@ services:
         condition: service_healthy
       n8n-redis:
         condition: service_healthy
-      n8n-traefik:
-        condition: service_healthy
     labels:
       - "traefik.enable=true"
       # HTTPS
@@ -650,13 +648,12 @@ services:
   # Traefik v3 — Reverse Proxy + SSL
   # ──────────────────────────────────────────────────────────
   n8n-traefik:
-    image: traefik:v3.3
+    image: traefik:latest
     container_name: n8n-traefik
     restart: unless-stopped
     command:
       - "--api.dashboard=false"
       - "--ping=true"
-      - "--entrypoints.traefik.address=:8080"
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
       - "--entrypoints.web.address=:80"
@@ -677,7 +674,7 @@ services:
     networks:
       - n8n-net
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/ping"]
+      test: ["CMD", "traefik", "healthcheck"]
       interval: 30s
       timeout: 10s
       retries: 3
