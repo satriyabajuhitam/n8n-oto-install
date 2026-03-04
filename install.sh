@@ -540,6 +540,8 @@ services:
         condition: service_healthy
       n8n-redis:
         condition: service_healthy
+      n8n-traefik:
+        condition: service_healthy
     labels:
       - "traefik.enable=true"
       # HTTPS
@@ -552,6 +554,16 @@ services:
       - "traefik.http.routers.n8n-http.entrypoints=web"
       - "traefik.http.routers.n8n-http.middlewares=redirect-https"
       - "traefik.http.middlewares.redirect-https.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.redirect-https.redirectscheme.permanent=true"
+      # Security headers
+      - "traefik.http.routers.n8n.middlewares=secHeaders@docker"
+      - "traefik.http.middlewares.secHeaders.headers.stsSeconds=31536000"
+      - "traefik.http.middlewares.secHeaders.headers.stsIncludeSubdomains=true"
+      - "traefik.http.middlewares.secHeaders.headers.stsPreload=true"
+      - "traefik.http.middlewares.secHeaders.headers.forceSTSHeader=true"
+      - "traefik.http.middlewares.secHeaders.headers.contentTypeNosniff=true"
+      - "traefik.http.middlewares.secHeaders.headers.browserXssFilter=true"
+      - "traefik.http.middlewares.secHeaders.headers.referrerPolicy=strict-origin-when-cross-origin"
     networks:
       - n8n-net
     healthcheck:
@@ -669,7 +681,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 30s
 
   # ──────────────────────────────────────────────────────────
   # Telegram Bot
