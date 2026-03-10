@@ -350,7 +350,7 @@ N8N_PROXY_HOPS=1
 # Execute Command and Local File Trigger allowed
 NODES_EXCLUDE=[]
 # Whitelist of paths for Read/Write Binary Files
-N8N_RESTRICT_FILE_ACCESS_TO=/home/node/.n8n-files;/data
+N8N_RESTRICT_FILE_ACCESS_TO="/home/node/.n8n-files;/data"
 # Task runners (false = faster, true = safer)
 N8N_RUNNERS_ENABLED=false
 
@@ -787,7 +787,8 @@ log_step "8/11 · Creating Telegram bot"
 # bot/Dockerfile
 cat > "$INSTALL_DIR/bot/Dockerfile" << 'BDEOF'
 FROM node:20-alpine
-RUN apk add --no-cache docker-cli bash curl openssl
+# docker-compose needed to stop/build/start containers from inside the bot
+RUN apk add --no-cache docker-cli docker-compose bash curl openssl
 WORKDIR /app
 COPY package.json ./
 RUN npm install --production
@@ -830,6 +831,27 @@ const run = (cmd, timeout = 60000) => new Promise((resolve, reject) => {
         else resolve(stdout || stderr || 'OK');
     });
 });
+
+// Auto-detect docker compose command (V2 plugin = 'docker compose', V1 standalone = 'docker-compose')
+let COMPOSE_CMD = null;
+const getComposeCmd = async () => {
+    if (COMPOSE_CMD) return COMPOSE_CMD;
+    try {
+        // Test Docker Compose V2 (plugin): 'docker compose version'
+        await run('docker compose version', 5000);
+        COMPOSE_CMD = 'docker compose';
+    } catch {
+        try {
+            // Fallback to Docker Compose V1 (standalone binary)
+            await run('docker-compose version', 5000);
+            COMPOSE_CMD = 'docker-compose';
+        } catch {
+            COMPOSE_CMD = 'docker compose'; // last resort fallback
+        }
+    }
+    console.log(`[bot] Using compose command: ${COMPOSE_CMD}`);
+    return COMPOSE_CMD;
+};
 
 // /start, /help
 bot.onText(/\/(start|help)/, (msg) => {
@@ -897,7 +919,7 @@ let isUpdating = false;
 bot.onText(/\/update/, async (msg) => {
     if (!auth(msg)) return;
     const cid = msg.chat.id;
-    if (isUpdating) { bot.sendMessage(cid, '\u23f3 Update already in progress, please wait...'); return; }
+    if (isUpdating) { bot.sendMessage(cid, '⏳ Update already in progress, please wait...'); return; }
     isUpdating = true;
     try {
         await bot.sendMessage(cid, '🔍 Checking versions...');
@@ -910,17 +932,22 @@ bot.onText(/\/update/, async (msg) => {
         await bot.sendMessage(cid, `📦 Current: *${cur}*\n🆕 Latest: *${lat}*`, { parse_mode: 'Markdown' });
         if (cur === lat && cur !== 'unknown') { bot.sendMessage(cid, '✅ Already on the latest version!'); return; }
 
+        // Get the correct compose command for this server
+        const DC = await getComposeCmd();
+
         await bot.sendMessage(cid, '💾 Backing up...');
-        await run(`${N8N_DIR}/backup_n8n.sh`, 300000).catch(() => {});
+        // Use 'bash' explicitly so script runs even if mount is read-only
+        await run(`bash ${N8N_DIR}/backup_n8n.sh`, 300000).catch(() => {});
 
         await bot.sendMessage(cid, '⏹ Stopping...');
-        await run(`docker compose -f ${N8N_DIR}/docker-compose.yml stop n8n n8n-worker`, 60000);
+        // Use 'cd' into N8N_DIR instead of '-f' flag (avoids V1/V2 compat issue)
+        await run(`cd ${N8N_DIR} && ${DC} stop n8n n8n-worker`, 60000);
 
         await bot.sendMessage(cid, '🔨 Rebuilding (5-10 min)...');
-        await run(`docker compose -f ${N8N_DIR}/docker-compose.yml build --pull n8n`, 900000);
+        await run(`cd ${N8N_DIR} && ${DC} build --pull n8n`, 900000);
 
         await bot.sendMessage(cid, '🚀 Starting...');
-        await run(`docker compose -f ${N8N_DIR}/docker-compose.yml up -d n8n n8n-worker`, 120000);
+        await run(`cd ${N8N_DIR} && ${DC} up -d n8n n8n-worker`, 120000);
         await new Promise(r => setTimeout(r, 20000));
 
         let nv = 'unknown';
@@ -938,7 +965,7 @@ bot.onText(/\/backup/, async (msg) => {
     const cid = msg.chat.id;
     await bot.sendMessage(cid, '💾 Creating backup...');
     try {
-        await run(`${N8N_DIR}/backup_n8n.sh`, 300000);
+        await run(`bash ${N8N_DIR}/backup_n8n.sh`, 300000);
         const info = await run(`ls -lhrt ${N8N_DIR}/backups/n8n_backup_*.tar.gz* 2>/dev/null | tail -1`).catch(() => '');
         bot.sendMessage(cid, `✅ Backup created!\n${info.trim()}`);
     } catch (e) { bot.sendMessage(cid, `❌ ${e.message}`); }
