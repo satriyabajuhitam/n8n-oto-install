@@ -351,8 +351,8 @@ N8N_PROXY_HOPS=1
 NODES_EXCLUDE=[]
 # Whitelist of paths for Read/Write Binary Files
 N8N_RESTRICT_FILE_ACCESS_TO="/home/node/.n8n-files;/data"
-# Task runners (false = faster, true = safer)
-N8N_RUNNERS_ENABLED=false
+# Offload manual executions to workers (recommended for scaling mode)
+OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS=true
 
 # ─── N8N LIMITS ─────────────────────────────────────────────
 N8N_PAYLOAD_SIZE_MAX=512
@@ -555,7 +555,7 @@ x-n8n-env: &n8n-env
   # n8n 2.x security
   NODES_EXCLUDE: ${NODES_EXCLUDE}
   N8N_RESTRICT_FILE_ACCESS_TO: ${N8N_RESTRICT_FILE_ACCESS_TO}
-  N8N_RUNNERS_ENABLED: ${N8N_RUNNERS_ENABLED}
+  OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS: ${OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS:-true}
   # Limits
   N8N_PAYLOAD_SIZE_MAX: ${N8N_PAYLOAD_SIZE_MAX:-512}
   N8N_FORMDATA_FILE_SIZE_MAX: ${N8N_FORMDATA_FILE_SIZE_MAX:-2048}
