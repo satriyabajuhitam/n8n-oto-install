@@ -113,7 +113,7 @@ nano /opt/automator/n8n/.env
 # TG_BOT_TOKEN=123456:ABC-DEF...
 # TG_USER_ID=987654321
 
-docker compose -f /opt/automator/n8n/docker-compose.yml restart n8n-bot
+cd /opt/automator/n8n && docker compose restart n8n-bot
 ```
 
 ### Commands
@@ -279,11 +279,13 @@ cp file.csv /data/reports/                         # ✅
 ### Key Settings
 
 ```env
-NODES_EXCLUDE=[]                                          # Execute Command allowed
-N8N_RESTRICT_FILE_ACCESS_TO=/home/node/.n8n-files;/data   # Whitelist
-N8N_RUNNERS_ENABLED=false                                 # false = faster
-N8N_COMMUNITY_PACKAGES_ENABLED=true                       # Community packages
+NODES_EXCLUDE=[]                                                 # Execute Command allowed
+N8N_RESTRICT_FILE_ACCESS_TO="/home/node/.n8n-files;/data"        # Whitelist (quotes required!)
+OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS=true                        # Offload to workers (queue mode)
+N8N_COMMUNITY_PACKAGES_ENABLED=true                              # Community packages
 ```
+
+> ⚠️ **Note:** `N8N_RUNNERS_ENABLED` was removed in n8n 2.11+ — do not add it to `.env`.
 
 ## 🌐 Architecture
 
@@ -328,7 +330,7 @@ docker compose down && docker compose up -d
 | `DOMAIN` | n8n Domain | — |
 | `N8N_BINARY_DATA_MODE` | File storage | `filesystem` |
 | `N8N_LOG_LEVEL` | Log level | `info` |
-| `N8N_RUNNERS_ENABLED` | Task runners | `false` |
+| `OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS` | Offload manual runs to workers | `true` |
 | `EXECUTIONS_MODE` | Execution mode | `queue` |
 | `BACKUP_RETENTION_DAYS` | Backup retention (days) | `7` |
 | `PROXY_URL` | External proxy | empty |
