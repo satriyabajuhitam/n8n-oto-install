@@ -515,8 +515,6 @@ x-n8n-env: &n8n-env
   N8N_BINARY_DATA_MODE: ${N8N_BINARY_DATA_MODE}
   N8N_DEFAULT_BINARY_DATA_MODE: ${N8N_DEFAULT_BINARY_DATA_MODE}
   # Proxy (Traefik)
-  N8N_EXPRESS_TRUST_PROXY: ${N8N_EXPRESS_TRUST_PROXY}
-  N8N_TRUSTED_PROXIES: ${N8N_TRUSTED_PROXIES}
   N8N_PROXY_HOPS: ${N8N_PROXY_HOPS}
   # External Proxy
   HTTP_PROXY: ${PROXY_URL:-}
@@ -1298,8 +1296,8 @@ echo -e "${GREEN}${BOLD}├─────────────────�
 printf  "${GREEN}${BOLD}│${NC}  %-20s ${CYAN}%-31s${NC} ${GREEN}${BOLD}│${NC}\n" "🌐 n8n URL" "https://${DOMAIN}"
 printf  "${GREEN}${BOLD}│${NC}  %-20s %-31s ${GREEN}${BOLD}│${NC}\n" "📦 n8n version" "v${N8N_VER}"
 printf  "${GREEN}${BOLD}│${NC}  %-20s %-31s ${GREEN}${BOLD}│${NC}\n" "🗄  PostgreSQL" "16"
-printf  "${GREEN}${BOLD}│${NC}  %-20s %-31s ${GREEN}${BOLD}│${NC}\n" "⚡ Redis" "7"
-printf  "${GREEN}${BOLD}│${NC}  %-20s %-31s ${GREEN}${BOLD}│${NC}\n" "🔒 Traefik" "latest"
+printf  "${GREEN}${BOLD}│${NC}  %-20s %-31s ${GREEN}${BOLD}│${NC}\n" "⚡ Redis" "8"
+printf  "${GREEN}${BOLD}│${NC}  %-20s %-31s ${GREEN}${BOLD}│${NC}\n" "🔒 Traefik" "v3"
 printf  "${GREEN}${BOLD}│${NC}  %-20s %-31s ${GREEN}${BOLD}│${NC}\n" "🖥  Server IP" "${PUBLIC_IP}"
 printf  "${GREEN}${BOLD}│${NC}  %-20s %-31s ${GREEN}${BOLD}│${NC}\n" "⏱  Total time" "${ELAPSED_FMT}"
 echo -e "${GREEN}${BOLD}├──────────────────────────────────────────────────────┤${NC}"
