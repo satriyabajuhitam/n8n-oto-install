@@ -119,8 +119,11 @@ echo ""
 # ============================================================
 log_step "Configuration  ─  Step 0/11"
 
+# ── Number of input steps ──
+INPUT_STEPS=5
+
 # --- 1. n8n Domain ---
-echo -e "  ${BOLD}[1/4] Domain${NC}  ${DIM}(e.g. n8n.example.com)${NC}"
+echo -e "  ${BOLD}[1/${INPUT_STEPS}] Domain${NC}  ${DIM}(e.g. n8n.example.com)${NC}"
 echo -e "  ${RED}●${NC} Required — must have a valid DNS A-record pointing to this server"
 read -p "  → Domain: " DOMAIN
 while [[ -z "$DOMAIN" ]]; do
@@ -130,7 +133,7 @@ done
 echo ""
 
 # --- 2. Email ---
-echo -e "  ${BOLD}[2/4] Email${NC}  ${DIM}(used for Let's Encrypt SSL certificate)${NC}"
+echo -e "  ${BOLD}[2/${INPUT_STEPS}] Email${NC}  ${DIM}(used for Let's Encrypt SSL certificate)${NC}"
 echo -e "  ${RED}●${NC} Required"
 read -p "  → Email: " EMAIL
 while ! echo "$EMAIL" | grep -qE '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'; do
@@ -140,14 +143,14 @@ done
 echo ""
 
 # --- 3. Telegram Bot Token ---
-echo -e "  ${BOLD}[3/4] Telegram Bot Token${NC}  ${DIM}(obtain from @BotFather on Telegram)${NC}"
+echo -e "  ${BOLD}[3/${INPUT_STEPS}] Telegram Bot Token${NC}  ${DIM}(obtain from @BotFather on Telegram)${NC}"
 echo -e "  ${YELLOW}○${NC} Optional — press Enter to skip, can be added later in .env"
 read -p "  → Bot Token: " TG_BOT_TOKEN
 TG_BOT_TOKEN="${TG_BOT_TOKEN:-}"
 echo ""
 
 # --- 4. Telegram User ID ---
-echo -e "  ${BOLD}[4/4] Telegram User ID${NC}  ${DIM}(obtain from @userinfobot on Telegram)${NC}"
+echo -e "  ${BOLD}[4/${INPUT_STEPS}] Telegram User ID${NC}  ${DIM}(obtain from @userinfobot on Telegram)${NC}"
 echo -e "  ${YELLOW}○${NC} Optional — press Enter to skip"
 read -p "  → User ID: " TG_USER_ID
 TG_USER_ID="${TG_USER_ID:-}"
@@ -156,6 +159,20 @@ echo ""
 if [[ -z "$TG_BOT_TOKEN" ]] || [[ -z "$TG_USER_ID" ]]; then
     log_warn "Telegram bot not configured (can be added later in .env)"
 fi
+
+# --- 5. Timezone ---
+echo -e "  ${BOLD}[5/${INPUT_STEPS}] Timezone${NC}  ${DIM}(applied to server OS and all containers)${NC}"
+echo -e "  ${YELLOW}○${NC} Optional — press Enter to use default ${DIM}[Asia/Jakarta]${NC}"
+read -p "  → Timezone: " TIMEZONE_INPUT
+TIMEZONE="${TIMEZONE_INPUT:-Asia/Jakarta}"
+
+# Validate timezone exists
+while [[ ! -f "/usr/share/zoneinfo/${TIMEZONE}" ]]; do
+    log_error "Invalid timezone '${TIMEZONE}'. Example: Asia/Jakarta, Europe/London, America/New_York"
+    read -p "  → Timezone: " TIMEZONE_INPUT
+    TIMEZONE="${TIMEZONE_INPUT:-Asia/Jakarta}"
+done
+echo ""
 
 # ============================================================
 # AUTOGENERATION OF PARAMETERS
@@ -168,8 +185,7 @@ ENCRYPTION_KEY=$(openssl rand -hex 32)
 REDIS_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
 log_ok "Passwords and encryption key generated"
 
-# Timezone and proxy — defaults
-TIMEZONE="Asia/Jakarta"
+# Proxy URL — default empty
 PROXY_URL=""
 
 # ============================================================
@@ -215,6 +231,11 @@ apt-get install -y -qq \
     git jq openssl cron software-properties-common
 
 log_ok "System updated"
+
+# Set server timezone
+timedatectl set-timezone "$TIMEZONE" 2>/dev/null || ln -sf "/usr/share/zoneinfo/${TIMEZONE}" /etc/localtime
+log_ok "Server timezone set: ${TIMEZONE} ($(date '+%Z %z'))"
+
 
 # ============================================================
 # 2. SWAP SETUP
