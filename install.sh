@@ -337,13 +337,14 @@ REDIS_PASSWORD=${REDIS_PASSWORD}
 N8N_ENCRYPTION_KEY=${ENCRYPTION_KEY}
 WEBHOOK_URL=https://${DOMAIN}/
 
-# Binary data on file system (faster than in DB)
-N8N_BINARY_DATA_MODE=filesystem
-N8N_DEFAULT_BINARY_DATA_MODE=filesystem
+# Binary data: gunakan 'default' (in-memory/DB) karena
+# queue mode TIDAK kompatibel dengan 'filesystem' mode.
+# Ref: https://docs.n8n.io/hosting/scaling/queue-mode/
+N8N_BINARY_DATA_MODE=default
+N8N_DEFAULT_BINARY_DATA_MODE=default
 
-# Proxy settings for Traefik
-N8N_EXPRESS_TRUST_PROXY=true
-N8N_TRUSTED_PROXIES=*
+# Proxy settings untuk Traefik (1 layer reverse proxy)
+# N8N_PROXY_HOPS=1 sudah cukup, tidak perlu TRUSTED_PROXIES=*
 N8N_PROXY_HOPS=1
 
 # ─── N8N 2.x SECURITY ──────────────────────────────────────
@@ -357,7 +358,8 @@ OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS=true
 # ─── N8N LIMITS ─────────────────────────────────────────────
 N8N_PAYLOAD_SIZE_MAX=512
 N8N_FORMDATA_FILE_SIZE_MAX=2048
-N8N_RUNNERS_TASK_TIMEOUT=1800
+# N8N_RUNNERS_TASK_TIMEOUT bukan env var untuk container n8n.
+# Timeout eksekusi diatur via EXECUTIONS_TIMEOUT di bawah.
 EXECUTIONS_TIMEOUT=-1
 EXECUTIONS_TIMEOUT_MAX=14400
 
@@ -380,15 +382,24 @@ GENERIC_TIMEZONE=${TIMEZONE}
 TZ=${TIMEZONE}
 
 # ─── N8N MISC ──────────────────────────────────────────────
-N8N_METRICS=true
+N8N_METRICS=false
 N8N_LOG_LEVEL=info
+# false = tidak kirim telemetri ke n8n.
+# CATATAN: jika false, fitur "Ask AI" di Code node tidak aktif.
 N8N_DIAGNOSTICS_ENABLED=false
 N8N_PERSONALIZATION_ENABLED=false
+
+# ─── CODE NODE MODULES ─────────────────────────────────────
+# Built-in Node.js modules yang diizinkan di Code node
+NODE_FUNCTION_ALLOW_BUILTIN=crypto,fs,path,url,util,stream,buffer,os,querystring,zlib
+# External npm modules yang diizinkan di Code node
+NODE_FUNCTION_ALLOW_EXTERNAL=axios,node-fetch,form-data,date-fns,lodash,fs-extra,csv-parser,xml2js,js-yaml,xlsx,jsonwebtoken,uuid,openai,ioredis,validator,winston,dotenv
 
 # ─── QUEUE MODE ────────────────────────────────────────────
 EXECUTIONS_MODE=queue
 QUEUE_BULL_REDIS_HOST=n8n-redis
 QUEUE_BULL_REDIS_PORT=6379
+QUEUE_BULL_REDIS_PASSWORD=${REDIS_PASSWORD}
 ENVEOF
 
 chmod 600 "$INSTALL_DIR/.env"
@@ -414,38 +425,13 @@ FROM alpine:3.21 AS builder
 
 RUN apk add --no-cache \
     bash curl wget git make g++ gcc \
-    python3 py3-pip libffi-dev \
-    ffmpeg \
-    chromium chromium-chromedriver \
-    font-noto font-noto-cjk font-noto-emoji \
-    imagemagick ghostscript graphicsmagick \
-    poppler-utils \
-    tesseract-ocr tesseract-ocr-data-rus tesseract-ocr-data-eng \
-    jq apache2-utils \
-    fontconfig ttf-freefont
+    jq apache2-utils
 
 # Pack tools into tar (follow symlinks with -h)
-RUN PYTHON_VER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')") && \
-    mkdir -p /export && tar chf /export/tools.tar \
-    /usr/bin/ffmpeg /usr/bin/ffprobe \
-    /usr/bin/python3 /usr/bin/python3.${PYTHON_VER} \
-    /usr/bin/chromium-browser /usr/lib/chromium/ \
-    /usr/bin/chromedriver \
-    /usr/bin/convert /usr/bin/magick /usr/bin/identify \
-    /usr/bin/gs /usr/bin/gm \
-    /usr/bin/pdftotext /usr/bin/pdftoppm \
-    /usr/bin/tesseract \
-    /usr/bin/jq /usr/bin/htpasswd \
-    /usr/bin/git \
+RUN mkdir -p /export && tar chf /export/tools.tar \
+    /usr/bin/jq \
+    /usr/bin/htpasswd \
     /usr/lib/lib*.so* \
-    /usr/lib/python3.${PYTHON_VER}/ \
-    /usr/lib/tesseract-ocr/ \
-    /usr/share/tessdata/ \
-    /usr/share/fonts/ \
-    /usr/lib/ImageMagick*/ \
-    /usr/lib/graphicsmagick*/ \
-    /etc/ImageMagick*/ \
-    /etc/fonts/ \
     /lib/lib*.so* \
     2>/dev/null ; true
 
@@ -470,18 +456,14 @@ RUN npm config set fund false && npm config set audit false
 # ─── npm global packages ──────────────────────────────────
 RUN for pkg in \
     axios node-fetch form-data \
-    moment date-fns lodash \
+    date-fns lodash \
     fs-extra csv-parser xml2js js-yaml xlsx \
-    jsonwebtoken simple-oauth2 uuid \
-    openai langchain \
-    node-telegram-bot-api discord.js vk-io \
-    fluent-ffmpeg \
-    google-tts-api \
-    mongoose ioredis \
-    bcrypt validator joi \
-    winston dotenv prom-client \
-    node-downloader-helper adm-zip archiver \
-    puppeteer-core \
+    jsonwebtoken uuid \
+    openai \
+    node-telegram-bot-api \
+    ioredis \
+    validator \
+    winston dotenv \
   ; do \
     echo "📦 $pkg..." && npm install -g "$pkg" 2>/dev/null || echo "⚠️  skip $pkg"; \
   done
@@ -491,11 +473,7 @@ RUN cd /tmp && npm install oauth-1.0a && \
     cp -r node_modules/oauth-1.0a /usr/local/lib/node_modules/ && \
     rm -rf /tmp/node_modules /tmp/package*.json
 
-# ─── Puppeteer / Chromium ───────────────────────────────────
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
-    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser \
-    CHROME_PATH=/usr/bin/chromium-browser \
-    N8N_USER_FOLDER=/home/node/.n8n
+ENV N8N_USER_FOLDER=/home/node/.n8n
 
 USER node
 WORKDIR /home/node
@@ -552,6 +530,9 @@ x-n8n-env: &n8n-env
   N8N_LOG_LEVEL: ${N8N_LOG_LEVEL}
   N8N_DIAGNOSTICS_ENABLED: ${N8N_DIAGNOSTICS_ENABLED}
   N8N_PERSONALIZATION_ENABLED: ${N8N_PERSONALIZATION_ENABLED}
+  # Code node modules
+  NODE_FUNCTION_ALLOW_BUILTIN: ${NODE_FUNCTION_ALLOW_BUILTIN}
+  NODE_FUNCTION_ALLOW_EXTERNAL: ${NODE_FUNCTION_ALLOW_EXTERNAL}
   # n8n 2.x security
   NODES_EXCLUDE: ${NODES_EXCLUDE}
   N8N_RESTRICT_FILE_ACCESS_TO: ${N8N_RESTRICT_FILE_ACCESS_TO}
@@ -676,10 +657,10 @@ services:
       start_period: 30s
 
   # ──────────────────────────────────────────────────────────
-  # Redis 7
+  # Redis 8
   # ──────────────────────────────────────────────────────────
   n8n-redis:
-    image: redis:7-alpine
+    image: redis:8-alpine
     container_name: n8n-redis
     restart: unless-stopped
     command: >
@@ -703,7 +684,7 @@ services:
   # Traefik v3 — Reverse Proxy + SSL
   # ──────────────────────────────────────────────────────────
   n8n-traefik:
-    image: traefik:latest
+    image: traefik:v3
     container_name: n8n-traefik
     restart: unless-stopped
     command:

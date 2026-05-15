@@ -1,46 +1,44 @@
 # n8n Universal Auto-Install v4.0
 
-Complete one-click automatic installation of n8n 2.x on clean Ubuntu 22.04 / 24.04.
+Instalasi otomatis n8n 2.x di Ubuntu 22.04 / 24.04 dengan satu perintah. Termasuk PostgreSQL, Redis, Traefik SSL, Queue Mode, dan Telegram Bot untuk manajemen server.
 
-## 🚀 What's Installed
+## 🚀 Stack yang Diinstal
 
-| Component | Version | Description |
-|-----------|--------|----------|
-| **n8n** | latest (2.x) | Automation platform |
-| **n8n-worker** | latest | Worker for queue mode |
-| **PostgreSQL** | 16-alpine | Database |
-| **Redis** | 7-alpine | Cache and task queue |
-| **Traefik** | v3.3 | Reverse proxy + SSL |
-| **Telegram Bot** | Node 20 | Server management |
+| Komponen | Versi | Keterangan |
+|----------|-------|------------|
+| **n8n** | latest (2.x) | Platform otomasi workflow |
+| **n8n-worker** | latest (2.x) | Worker untuk Queue Mode |
+| **PostgreSQL** | 16-alpine | Database utama |
+| **Redis** | 8-alpine | Message broker & task queue |
+| **Traefik** | v3 | Reverse proxy + SSL otomatis |
+| **Telegram Bot** | Node 20 | Manajemen server via Telegram |
 
-### Tools built into the n8n image
+### npm Modules Tersedia di Code Node
 
-- **AI/ML:** OpenAI, LangChain
-- **Media:** FFmpeg, ImageMagick, Ghostscript, GraphicsMagick
-- **OCR:** Tesseract (Russian + English)
-- **Browser:** Chromium + Puppeteer
-- **Bots:** Telegram, Discord, VK
-- **Data:** CSV, XLSX, XML, YAML parsers
-- **30+ npm libraries** globally for Code-nodes
+Module-module berikut sudah tersedia untuk digunakan dengan `require()` di Code node:
 
-## 📋 Requirements
+**Built-in Node.js:** `crypto`, `fs`, `path`, `url`, `util`, `stream`, `buffer`, `os`, `querystring`, `zlib`
 
-- **OS:** Ubuntu 22.04 or 24.04 (clean server)
-- **RAM:** minimum 2GB (4GB recommended)
-- **Disk:** minimum 10GB free
-- **Domain** with a DNS A-record pointing to the server's IP
-- **Ports 80 and 443** open
-- **Root access**
+**External npm:** `axios`, `node-fetch`, `form-data`, `date-fns`, `lodash`, `fs-extra`, `csv-parser`, `xml2js`, `js-yaml`, `xlsx`, `jsonwebtoken`, `uuid`, `openai`, `ioredis`, `validator`, `winston`, `dotenv`
 
-## 🎯 Installation
+## 📋 Persyaratan
 
-### One-click
+- **OS:** Ubuntu 22.04 atau 24.04 (server bersih)
+- **RAM:** minimal 2 GB (4 GB direkomendasikan)
+- **Disk:** minimal 10 GB free
+- **Domain** dengan DNS A-record yang mengarah ke IP server
+- **Port 80 dan 443** terbuka ke internet
+- **Akses root**
+
+## 🎯 Instalasi
+
+### One-liner
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/satriyabajuhitam/n8n-oto-install/main/install.sh)
 ```
 
-### Or download and run
+### Download dan jalankan
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/satriyabajuhitam/n8n-oto-install/main/install.sh -o install.sh
@@ -48,65 +46,94 @@ chmod +x install.sh
 sudo bash install.sh
 ```
 
-### What the script will ask (4 questions total)
+### Input yang diperlukan (4 pertanyaan)
 
-| Parameter | Example | Mandatory |
-|----------|--------|:---:|
-| n8n Domain | `n8n.example.com` | ✅ |
-| Email for SSL | `admin@example.com` | ✅ |
-| Telegram Bot Token | from @BotFather | ❌ |
-| Telegram User ID | from @userinfobot | ❌ |
+| Parameter | Contoh | Wajib |
+|-----------|--------|:-----:|
+| Domain n8n | `n8n.example.com` | ✅ |
+| Email untuk SSL | `admin@example.com` | ✅ |
+| Telegram Bot Token | dari @BotFather | ❌ |
+| Telegram User ID | dari @userinfobot | ❌ |
 
-**Everything else is generated automatically:**
-- PostgreSQL Password
-- n8n Encryption Key (64 hex characters)
-- Redis Password
-- Timezone: Asia/Jakarta (can be changed in `.env` after installation)
+**Dibuat otomatis oleh script:**
+- Password PostgreSQL
+- n8n Encryption Key (64 hex karakter)
+- Password Redis
+- Timezone: Asia/Jakarta (bisa diubah di `.env` setelah instalasi)
 
-## 📁 Project Structure
+## 📁 Struktur Direktori
 
 ```
 /opt/automator/n8n/
-├── install.sh              # Installation script
-├── docker-compose.yml      # Container configuration
+├── install.sh              # Script instalasi
+├── docker-compose.yml      # Konfigurasi container
 ├── Dockerfile.n8n          # Custom n8n image
-├── .env                    # All passwords and settings
-├── update_n8n.sh           # Update n8n
-├── backup_n8n.sh           # Create backup
-├── restore_n8n.sh          # Restore from backup
+├── .env                    # Semua password dan konfigurasi
+├── update_n8n.sh           # Script update n8n
+├── backup_n8n.sh           # Script backup
+├── restore_n8n.sh          # Script restore
 ├── bot/
 │   ├── bot.js              # Telegram bot
 │   ├── Dockerfile          # Bot image
-│   └── package.json        # Dependencies
-├── n8n-files/              # n8n v2 Sandbox zone (Read/Write Binary Files)
-├── data/                   # Custom working folder
-├── logs/                   # Operation logs
-└── backups/                # Backups
+│   └── package.json        # Dependencies bot
+├── n8n-files/              # Sandbox zone n8n (Read/Write Binary Files)
+├── data/                   # Folder kerja kustom
+├── logs/                   # Log operasional
+└── backups/                # Hasil backup
 ```
 
-## 🔐 Access
+## 🌐 Arsitektur
 
-After installation, all passwords are printed to the console and saved in `/opt/automator/n8n/.env`.
+```
+Internet
+    │
+    ▼
+┌─────────┐
+│ Traefik │  :80 / :443 (SSL Let's Encrypt otomatis)
+│   v3    │
+└────┬────┘
+     │
+     └── n8n.example.com ──► n8n :5678
+                               │
+              ┌────────────────┤
+              │                │
+         ┌────┴────┐    ┌──────┴─────┐
+         │  n8n    │◄──►│ n8n-worker │
+         │  (UI +  │    │  (eksekusi │
+         │ webhook)│    │  workflow) │
+         └────┬────┘    └──────┬─────┘
+              │                │
+         ┌────┴────┐    ┌──────┴─────┐
+         │Postgres │    │   Redis    │
+         │   16    │    │     8      │
+         └─────────┘    └────────────┘
+```
+
+**Queue Mode:** n8n (main) menangani webhook dan UI. n8n-worker mengeksekusi workflow. Keduanya membaca task dari Redis.
+
+## 🔐 Akses
+
+Setelah instalasi, semua password ditampilkan di konsol dan tersimpan di `/opt/automator/n8n/.env`.
 
 ```
 URL: https://n8n.example.com
-The first user is created upon the first login.
+User pertama dibuat saat login pertama kali.
 ```
 
-Quick password view:
+Lihat password dengan cepat:
 
 ```bash
 cd /opt/automator/n8n
-grep PASSWORD .env
+grep -E 'PASSWORD|KEY|TOKEN' .env
 ```
 
 ## 🤖 Telegram Bot
 
-### Configuration
+### Setup
 
-1. Create a bot: write to [@BotFather](https://t.me/BotFather) → `/newbot`
-2. Get User ID: write to [@userinfobot](https://t.me/userinfobot)
-3. Specify during installation or add later to `.env`:
+1. Buat bot: kirim pesan ke [@BotFather](https://t.me/BotFather) → `/newbot`
+2. Dapatkan User ID: kirim pesan ke [@userinfobot](https://t.me/userinfobot)
+3. Masukkan saat instalasi **atau** tambahkan ke `.env` setelah instalasi:
 
 ```bash
 nano /opt/automator/n8n/.env
@@ -116,27 +143,100 @@ nano /opt/automator/n8n/.env
 cd /opt/automator/n8n && docker compose restart n8n-bot
 ```
 
-### Commands
+### Perintah Bot
 
-| Command | Description |
-|---------|----------|
-| `/start` `/help` | Help |
-| `/status` | Uptime, RAM, disk, n8n version, container status |
-| `/logs [N]` | Last N log lines (default 50) |
+| Perintah | Fungsi |
+|----------|--------|
+| `/start` `/help` | Tampilkan bantuan |
+| `/status` | Uptime, RAM, disk, versi n8n, status container |
+| `/logs [N]` | N baris log terakhir (default 50) |
 | `/update` | Update n8n (backup → rebuild → restart) |
-| `/backup` | Create backup |
+| `/backup` | Buat backup |
 | `/restart` | Restart n8n |
-| `/disk` | Disk space (system + Docker) |
-| `/urls` | n8n URL |
+| `/disk` | Informasi disk (sistem + Docker) |
+| `/urls` | Tampilkan URL n8n |
 
-### Bot Security
+### Keamanan Bot
 
-- Authorization by `TG_USER_ID` — only one user
-- If token is not set — bot exits quietly (doesn't enter restart loop)
+- Akses hanya untuk `TG_USER_ID` yang terdaftar
+- Jika token tidak di-set, bot berhenti diam-diam (tidak masuk restart loop)
 
-## 🛠️ Management
+## ⚙️ Konfigurasi
 
-### Status
+Semua pengaturan ada di `/opt/automator/n8n/.env`. Setelah diubah, jalankan:
+
+```bash
+cd /opt/automator/n8n
+docker compose down && docker compose up -d
+```
+
+### Variabel Penting
+
+| Variabel | Deskripsi | Default |
+|----------|-----------|:-------:|
+| `DOMAIN` | Domain n8n | — |
+| `N8N_BINARY_DATA_MODE` | Mode penyimpanan binary | `default` |
+| `EXECUTIONS_MODE` | Mode eksekusi | `queue` |
+| `OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS` | Delegasi ke worker | `true` |
+| `N8N_LOG_LEVEL` | Level log | `info` |
+| `BACKUP_RETENTION_DAYS` | Retensi backup (hari) | `7` |
+| `PROXY_URL` | Proxy eksternal | kosong |
+| `NODE_FUNCTION_ALLOW_EXTERNAL` | npm modules untuk Code node | *(lihat .env)* |
+| `NODE_FUNCTION_ALLOW_BUILTIN` | Built-in modules untuk Code node | *(lihat .env)* |
+
+### Code Node — Menggunakan `require()`
+
+Module yang diizinkan dikonfigurasi via `.env`:
+
+```env
+NODE_FUNCTION_ALLOW_BUILTIN=crypto,fs,path,url,util,stream,buffer,os,querystring,zlib
+NODE_FUNCTION_ALLOW_EXTERNAL=axios,node-fetch,openai,lodash,date-fns,...
+```
+
+Contoh penggunaan di Code node:
+
+```javascript
+// Gunakan OpenAI
+const { OpenAI } = require('openai');
+
+// Gunakan axios
+const axios = require('axios');
+
+// Gunakan crypto
+const crypto = require('crypto');
+```
+
+### Proxy Eksternal
+
+Jika n8n perlu akses internet melalui proxy:
+
+```env
+PROXY_URL=http://user:pass@proxy-server:port
+NO_PROXY=localhost,127.0.0.1,::1,.local,postgres,redis,traefik,n8n,n8n-postgres,n8n-redis,n8n-traefik
+```
+
+## 📂 Keamanan File System
+
+### Zona yang Diizinkan
+
+| Path | Fungsi |
+|------|--------|
+| `/home/node/.n8n-files` | Zona sandbox standar n8n v2 |
+| `/data` | Folder kerja kustom |
+
+Kedua path ini terdaftar di `N8N_RESTRICT_FILE_ACCESS_TO`.
+
+### Contoh Penggunaan
+
+```
+/home/node/.n8n-files/laporan.pdf    ✅ Diizinkan
+/data/project/dokumen.xlsx           ✅ Diizinkan
+/tmp/file.txt                        ❌ Diblokir
+```
+
+## 🛠️ Manajemen Server
+
+### Status Container
 
 ```bash
 cd /opt/automator/n8n
@@ -146,13 +246,13 @@ docker compose ps
 ### Logs
 
 ```bash
-# All services
+# Semua service
 docker compose logs -f
 
-# n8n only
+# n8n saja
 docker compose logs -f n8n
 
-# Last 50 lines
+# 50 baris terakhir
 docker logs n8n --tail 50
 ```
 
@@ -161,64 +261,64 @@ docker logs n8n --tail 50
 ```bash
 cd /opt/automator/n8n
 
-# Single service
+# Service tertentu
 docker compose restart n8n
 
-# All
+# Semua service
 docker compose restart
 
-# Full restart
+# Full restart (down + up)
 docker compose down && docker compose up -d
 ```
 
-### Updating n8n
+## 🔄 Update n8n
 
 ```bash
 cd /opt/automator/n8n
 ./update_n8n.sh
 ```
 
-Or via Telegram: `/update`
+Atau via Telegram: `/update`
 
-The script automatically:
-1. Checks versions (current vs latest)
-2. Creates backup
-3. Stops n8n + worker
-4. Rebuilds image with `--pull` (new base n8n)
-5. Starts containers
-6. Checks healthcheck
-7. Cleans up old images
+Script otomatis:
+1. Cek versi saat ini vs latest
+2. Buat backup
+3. Stop n8n + worker
+4. Rebuild image dengan `--pull` (base image n8n terbaru)
+5. Jalankan kembali
+6. Verifikasi healthcheck
+7. Bersihkan image lama
 
-## 💾 Backup
+## 💾 Backup & Restore
 
-### Creating Backup
+### Buat Backup
 
 ```bash
 cd /opt/automator/n8n
 ./backup_n8n.sh
 ```
 
-Or via Telegram: `/backup`
+Atau via Telegram: `/backup`
 
-**What's included in the backup:**
-- PostgreSQL dump (all workflows, credentials, settings)
-- n8n configuration (`/home/node/.n8n`)
-- `.env` and `docker-compose.yml` files
-- Version information
+**Isi backup:**
+- Dump PostgreSQL (semua workflow, credentials, settings)
+- Konfigurasi n8n (`/home/node/.n8n`)
+- File `.env` dan `docker-compose.yml`
+- Informasi versi
 
-**Encryption:** if `N8N_ENCRYPTION_KEY` is set in `.env`, the backup is encrypted using AES-256-CBC.
+**Enkripsi:** Backup dienkripsi AES-256-CBC menggunakan `N8N_ENCRYPTION_KEY`.
 
-> ⚠️ **Important:** The `N8N_ENCRYPTION_KEY` is required to decrypt backups. If you lose this key, encrypted backups cannot be recovered. Always keep a copy of your `.env` file in a safe place.
+> ⚠️ **Penting:** Simpan file `.env` di tempat yang aman. Tanpa `N8N_ENCRYPTION_KEY`, backup terenkripsi tidak bisa dipulihkan.
 
-### Automatic Backups
+### Backup Otomatis
 
-Configured during installation via cron — daily at 2:00.
+Dikonfigurasi via cron — setiap hari pukul 02:00.
 
 ```bash
-# Check schedule
+# Lihat jadwal
 crontab -l
 
-# Edit
+# Edit jadwal
 crontab -e
 ```
 
@@ -227,137 +327,42 @@ crontab -e
 ```bash
 cd /opt/automator/n8n
 
-# List backups
+# Lihat daftar backup
 ls -lhrt backups/
 
-# Restore
-./restore_n8n.sh backups/n8n_backup_20250101_020000.tar.gz.enc
+# Restore dari backup
+./restore_n8n.sh backups/n8n_backup_20260101_020000.tar.gz.enc
 ```
 
-The script:
-1. Creates a backup of the current state (just in case)
-2. Stops all containers
-3. Decrypts and extracts
-4. Restores PostgreSQL
-5. Restores n8n configuration
-6. Prompts to restore `.env` (optional)
-7. Starts everything
+Script restore akan:
+1. Buat backup kondisi saat ini (jaga-jaga)
+2. Stop semua container
+3. Dekripsi dan ekstrak
+4. Restore PostgreSQL
+5. Restore konfigurasi n8n
+6. Tanya apakah `.env` ikut di-restore (opsional)
+7. Jalankan kembali semua service
 
-### Storage
+### Penyimpanan
 
-- Backups are stored in `/opt/automator/n8n/backups/`
-- Auto-deletion older than 7 days (configured by: `BACKUP_RETENTION_DAYS` in `.env`)
+- Lokasi: `/opt/automator/n8n/backups/`
+- Auto-hapus setelah `BACKUP_RETENTION_DAYS` hari (default: 7)
 
-## ⚙️ n8n 2.x — File System Security
+## 🔒 Keamanan
 
-### File Zones
+### Rekomendasi
 
-| Path | Purpose |
-|------|------------|
-| `/home/node/.n8n-files` | Standard n8n v2 sandbox zone |
-| `/data` | Custom project working folder |
+1. **SSH:** Gunakan key-based auth, nonaktifkan login password root
+2. **Firewall:** Buka hanya port 80, 443, dan 22
+3. **Update rutin:** gunakan `/update` via bot
+4. **Backup harian:** aktif secara default (02:00)
+5. **Monitoring:** gunakan `/status` di bot
 
-Both zones are added to the `N8N_RESTRICT_FILE_ACCESS_TO` whitelist.
+### Isolasi Jaringan
 
-### Usage in Nodes
+PostgreSQL dan Redis **tidak dapat diakses dari internet** — hanya dari internal Docker network `n8n-net`.
 
-**Read/Write Binary Files:**
-
-```
-/home/node/.n8n-files/report.pdf    ✅ Works
-/data/project/document.xlsx          ✅ Works
-/tmp/file.txt                        ❌ Forbidden
-```
-
-**Execute Command:**
-
-```bash
-echo "data" > /home/node/.n8n-files/output.txt   # ✅
-cp file.csv /data/reports/                         # ✅
-```
-
-### Key Settings
-
-```env
-NODES_EXCLUDE=[]                                                 # Execute Command allowed
-N8N_RESTRICT_FILE_ACCESS_TO="/home/node/.n8n-files;/data"        # Whitelist (quotes required!)
-OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS=true                        # Offload to workers (queue mode)
-N8N_COMMUNITY_PACKAGES_ENABLED=true                              # Community packages
-```
-
-> ⚠️ **Note:** `N8N_RUNNERS_ENABLED` was removed in n8n 2.11+ — do not add it to `.env`.
-
-## 🌐 Architecture
-
-```
-Internet
-    │
-    ▼
-┌─────────┐
-│ Traefik │ :80 / :443 (SSL Let's Encrypt)
-│   v3.3  │
-└────┬────┘
-     │
-     └── n8n.example.com → n8n :5678
-                             │
-              ┌──────────────┤
-              │              │
-         ┌────┴────┐  ┌─────┴─────┐
-         │ n8n-app │◄►│ n8n-worker│
-         └────┬────┘  └─────┬─────┘
-              │              │
-         ┌────┴────┐  ┌─────┴─────┐
-         │Postgres │  │   Redis   │
-         │   16    │  │     7     │
-         └─────────┘  └───────────┘
-```
-
-**Queue mode:** n8n-app handles webhooks and UI, n8n-worker executes workflows. Both read tasks from Redis.
-
-## 🔧 Configuration
-
-All settings in `/opt/automator/n8n/.env`. After modifications:
-
-```bash
-cd /opt/automator/n8n
-docker compose down && docker compose up -d
-```
-
-### Key Variables
-
-| Variable | Description | Default |
-|------------|----------|:---:|
-| `DOMAIN` | n8n Domain | — |
-| `N8N_BINARY_DATA_MODE` | File storage | `filesystem` |
-| `N8N_LOG_LEVEL` | Log level | `info` |
-| `OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS` | Offload manual runs to workers | `true` |
-| `EXECUTIONS_MODE` | Execution mode | `queue` |
-| `BACKUP_RETENTION_DAYS` | Backup retention (days) | `7` |
-| `PROXY_URL` | External proxy | empty |
-
-### Proxy
-
-If n8n needs to access the internet via a proxy:
-
-```env
-PROXY_URL=http://user:pass@proxy-server:port
-NO_PROXY=localhost,127.0.0.1,::1,.local,postgres,redis,traefik,n8n,n8n-postgres,n8n-redis,n8n-traefik
-```
-
-## 🔒 Security
-
-### Recommendations
-
-1. **SSH:** key-only, disable root password
-2. **Firewall:** only ports 80, 443 (and 22 for SSH) open
-3. **Updates:** regular updates via `/update` in the bot
-4. **Backups:** enabled by default (daily at 2:00)
-5. **Monitoring:** `/status` in the bot
-
-### Isolation
-
-- PostgreSQL and Redis are **NOT accessible** from the internet — Docker internal network only
-- For direct connection, use an SSH tunnel:
+Untuk koneksi langsung dari lokal, gunakan SSH tunnel:
 
 ```bash
 # PostgreSQL
@@ -369,7 +374,7 @@ ssh -L 6379:localhost:6379 user@server
 
 ## 🐛 Troubleshooting
 
-### n8n Not Starting
+### n8n tidak mau start
 
 ```bash
 cd /opt/automator/n8n
@@ -377,26 +382,26 @@ docker compose logs n8n --tail 50
 docker compose ps
 ```
 
-### Traefik Unhealthy
+### Traefik unhealthy
 
 ```bash
-# Check Traefik health status
+# Cek status health
 docker inspect n8n-traefik --format='{{json .State.Health.Status}}'
 
-# Check Traefik ping endpoint (should return 200)
+# Cek ping endpoint (harus 200)
 docker exec n8n-traefik wget -qO- http://localhost:8080/ping
 
-# Traefik logs
+# Lihat log Traefik
 docker compose logs n8n-traefik --tail 30
 ```
 
-### SSL Certificates Not Issued
+### SSL tidak terbit
 
-1. Check DNS: `dig n8n.example.com` → your IP
-2. Ports 80/443 open: `ss -tlnp | grep -E ':(80|443)'`
-3. Traefik logs: `docker compose logs n8n-traefik`
+1. Cek DNS: `dig n8n.example.com` → harus ke IP server
+2. Cek port terbuka: `ss -tlnp | grep -E ':(80|443)'`
+3. Lihat log Traefik: `docker compose logs n8n-traefik`
 
-### Bot Not Responding
+### Bot tidak merespons
 
 ```bash
 docker compose logs n8n-bot --tail 20
@@ -404,92 +409,91 @@ grep TG_ /opt/automator/n8n/.env
 docker compose restart n8n-bot
 ```
 
-### Insufficient Memory (OOM)
+### Kehabisan memori (OOM)
 
 ```bash
-# Check SWAP
+# Cek SWAP
 free -h
 swapon --show
 
-# Add if missing
+# Tambah SWAP jika belum ada
 fallocate -l 4G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
 echo '/swapfile none swap sw 0 0' >> /etc/fstab
 ```
 
-### Disk Cleanup
+### Bersihkan disk
 
 ```bash
-# Old images
+# Image lama
 docker image prune -a
 
 # Build cache
 docker builder prune -af
 
-# All unused
+# Semua yang tidak terpakai
 docker system prune -a --volumes
 ```
 
 ## 📊 Monitoring
 
-### Telegram Bot
+### Via Telegram Bot
 
-`/status` shows: uptime, RAM, disk, n8n version, all containers.
+`/status` menampilkan: uptime, RAM, disk, versi n8n, status semua container.
 
-### Useful Commands
+### Perintah Berguna
 
 ```bash
-# Real-time container resources
+# Resource container real-time
 docker stats
 
-# n8n version
+# Versi n8n
 docker exec n8n n8n --version
 
-# Database size
+# Ukuran database
 docker exec n8n-postgres psql -U n8n -c "SELECT pg_size_pretty(pg_database_size('n8n'));"
 
-# Testing tools inside the container
-docker exec n8n sh -c "ffmpeg -version 2>&1 | head -1"
-docker exec n8n sh -c "python3 --version"
-docker exec n8n sh -c "chromium-browser --version"
-docker exec n8n sh -c "tesseract --version 2>&1 | head -1"
+# Status Redis
+docker exec n8n-redis redis-cli --no-auth-warning -a "$REDIS_PASSWORD" info server | grep redis_version
 ```
 
-## 📝 Command Cheat Sheet
+## 📝 Cheat Sheet
 
 ```bash
 cd /opt/automator/n8n
 
-# ─── Status ──────────────────────────────
-docker compose ps                    # All containers
+# ─── Status ───────────────────────────────────
+docker compose ps                          # Semua container
+docker stats                               # Resource real-time
 
-# ─── Logs ────────────────────────────────
-docker compose logs -f n8n           # Follow logs
-docker logs n8n --tail 100           # Last 100 lines
+# ─── Logs ─────────────────────────────────────
+docker compose logs -f n8n                 # Follow log n8n
+docker logs n8n --tail 100                 # 100 baris terakhir
 
-# ─── Management ─────────────────────────
-docker compose restart n8n           # Restart n8n
+# ─── Restart ──────────────────────────────────
+docker compose restart n8n                 # Restart n8n saja
 docker compose down && docker compose up -d  # Full restart
 
-# ─── Update ─────────────────────────
-./update_n8n.sh                      # Update n8n
+# ─── Update ───────────────────────────────────
+./update_n8n.sh                            # Update n8n
 
-# ─── Backups ─────────────────────────────
-./backup_n8n.sh                      # Create backup
-./restore_n8n.sh backups/FILE        # Restore
-ls -lhrt backups/                    # List backups
+# ─── Backup ───────────────────────────────────
+./backup_n8n.sh                            # Buat backup
+./restore_n8n.sh backups/FILE              # Restore backup
+ls -lhrt backups/                          # Daftar backup
 
-# ─── Passwords / Secrets ─────────────────────────────
-grep -E 'PASSWORD|KEY|TOKEN' .env      # All secrets
+# ─── Secrets ──────────────────────────────────
+grep -E 'PASSWORD|KEY|TOKEN' .env          # Lihat semua secret
 
-# ─── Diagnostics ────────────────────────
-docker stats                         # Resources
-df -h                                # Disk
-free -h                              # RAM + SWAP
-docker system df                     # Docker storage
+# ─── Diagnostik ───────────────────────────────
+df -h                                      # Disk
+free -h                                    # RAM + SWAP
+docker system df                           # Storage Docker
 ```
 
-## 📜 License
+## 📜 Lisensi
 
-MIT License — feel free to use for personal and commercial projects.
+MIT License — bebas digunakan untuk proyek personal maupun komersial.
 
 ---
+
+*n8n Universal Auto-Install v4.0 — dioptimasi untuk n8n 2.20.x, Mei 2026*
