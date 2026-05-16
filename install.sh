@@ -448,12 +448,16 @@ FROM alpine:3.21 AS builder
 
 RUN apk add --no-cache \
     bash curl wget git make g++ gcc \
-    jq apache2-utils
+    jq apache2-utils \
+    ffmpeg
 
 # Pack tools into tar (follow symlinks with -h)
+# lib*.so* captures all FFmpeg shared libs: libavcodec, libavformat, libswscale, etc.
 RUN mkdir -p /export && tar chf /export/tools.tar \
     /usr/bin/jq \
     /usr/bin/htpasswd \
+    /usr/bin/ffmpeg \
+    /usr/bin/ffprobe \
     /usr/lib/lib*.so* \
     /lib/lib*.so* \
     2>/dev/null ; true
@@ -477,11 +481,10 @@ RUN set -eux; \
 RUN npm config set fund false && npm config set audit false
 
 # ─── FFmpeg ──────────────────────────────────────────────────
-# Install via Alpine apk → auto-resolves all shared libs (libavcodec etc)
-# Binary lands at /usr/bin/ffmpeg — already on PATH, no extra config needed
+# Installed in Stage 1 (Alpine builder) via apk, copied here via tools.tar
+# Binary at /usr/bin/ffmpeg — already on PATH, no extra config needed
 # File staging: host ./media/ ↔ container /files/ (see docker-compose volumes)
-RUN apk add --no-cache ffmpeg && \
-    ffmpeg -version 2>&1 | head -1
+RUN ffmpeg -version 2>&1 | head -1 || echo "⚠ ffmpeg not found in tar — check Stage 1"
 
 # ─── npm global packages ──────────────────────────────────
 RUN for pkg in \
