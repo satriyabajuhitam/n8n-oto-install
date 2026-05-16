@@ -459,6 +459,7 @@ RUN mkdir -p /export && tar chf /export/tools.tar \
     /usr/bin/ffmpeg \
     /usr/bin/ffprobe \
     /usr/lib/lib*.so* \
+    /usr/lib/pulseaudio/ \
     /lib/lib*.so* \
     2>/dev/null ; true
 
