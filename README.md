@@ -1,6 +1,6 @@
 # n8n Universal Auto-Install v4.0
 
-Instalasi otomatis n8n 2.x di Ubuntu 22.04 / 24.04 dengan satu perintah. Termasuk PostgreSQL, Redis, Traefik SSL, Queue Mode, dan Telegram Bot untuk manajemen server.
+Instalasi otomatis n8n 2.x di Ubuntu 22.04 / 24.04 dengan satu perintah. Termasuk PostgreSQL, Redis, Traefik SSL, Queue Mode, FFmpeg, dan Telegram Bot untuk manajemen server.
 
 ## 🚀 Stack yang Diinstal
 
@@ -11,6 +11,7 @@ Instalasi otomatis n8n 2.x di Ubuntu 22.04 / 24.04 dengan satu perintah. Termasu
 | **PostgreSQL** | 16-alpine | Database utama |
 | **Redis** | 8-alpine | Message broker & task queue |
 | **Traefik** | v3 | Reverse proxy + SSL otomatis |
+| **FFmpeg** | Alpine (latest) | Pemrosesan audio/video via Exec Node |
 | **Telegram Bot** | Node 20 | Manajemen server via Telegram |
 
 ### npm Modules Tersedia di Code Node
@@ -67,7 +68,7 @@ sudo bash install.sh
 /opt/automator/n8n/
 ├── install.sh              # Script instalasi
 ├── docker-compose.yml      # Konfigurasi container
-├── Dockerfile.n8n          # Custom n8n image
+├── Dockerfile.n8n          # Custom n8n image (termasuk FFmpeg)
 ├── .env                    # Semua password dan konfigurasi
 ├── update_n8n.sh           # Script update n8n
 ├── backup_n8n.sh           # Script backup
@@ -77,7 +78,8 @@ sudo bash install.sh
 │   ├── Dockerfile          # Bot image
 │   └── package.json        # Dependencies bot
 ├── n8n-files/              # Sandbox zone n8n (Read/Write Binary Files)
-├── data/                   # Folder kerja kustom
+├── data/                   # Folder kerja kustom n8n
+├── media/                  # ← FFmpeg: file input/output (di-mount sebagai /files)
 ├── logs/                   # Log operasional
 └── backups/                # Hasil backup
 ```
@@ -219,19 +221,96 @@ NO_PROXY=localhost,127.0.0.1,::1,.local,postgres,redis,traefik,n8n,n8n-postgres,
 
 ### Zona yang Diizinkan
 
-| Path | Fungsi |
-|------|--------|
-| `/home/node/.n8n-files` | Zona sandbox standar n8n v2 |
-| `/data` | Folder kerja kustom |
+| Path container | Path host | Fungsi |
+|----------------|-----------|--------|
+| `/home/node/.n8n-files` | `./n8n-files/` | Sandbox standar n8n (Read/Write Binary Files) |
+| `/data` | `./data/` | Folder kerja kustom n8n |
+| `/files` | `./media/` | **Staging area FFmpeg** (input/output media) |
 
-Kedua path ini terdaftar di `N8N_RESTRICT_FILE_ACCESS_TO`.
+Ketiga path ini terdaftar di `N8N_RESTRICT_FILE_ACCESS_TO`.
 
 ### Contoh Penggunaan
 
 ```
 /home/node/.n8n-files/laporan.pdf    ✅ Diizinkan
 /data/project/dokumen.xlsx           ✅ Diizinkan
+/files/input.mp4                     ✅ Diizinkan (FFmpeg)
+/files/output.mp3                    ✅ Diizinkan (FFmpeg)
 /tmp/file.txt                        ❌ Diblokir
+```
+
+## 🎬 FFmpeg — Pemrosesan Audio & Video
+
+FFmpeg sudah terpasang di dalam container n8n dan n8n-worker. Bisa langsung dipakai dari **Execute Command Node** tanpa konfigurasi tambahan.
+
+### Direktori Media
+
+File input/output FFmpeg disimpan **terpisah** dari data n8n:
+
+| Lokasi | Path |
+|--------|------|
+| **Di host** | `/opt/automator/n8n/media/` |
+| **Di container** | `/files/` |
+
+Upload file ke host via SCP/SFTP, lalu akses dari n8n via `/files/`.
+
+### Alur Workflow yang Direkomendasikan
+
+```
+[Webhook / HTTP Trigger]
+        ↓
+[Write Binary File → /files/input.xxx]   ← simpan file ke disk
+        ↓
+[Execute Command: ffmpeg -i /files/input.xxx ... /files/output.xxx]
+        ↓
+[Read Binary File ← /files/output.xxx]   ← ambil hasil
+        ↓
+[Upload / kirim / proses selanjutnya]
+```
+
+### Contoh Command di Execute Command Node
+
+```bash
+# Konversi audio OGA/OGG → WAV
+ffmpeg -y -i /files/input.oga -acodec pcm_s16le -ar 44100 /files/output.wav
+
+# Extract audio dari video
+ffmpeg -i /files/input.mp4 -q:a 0 -map a /files/output.mp3
+
+# Kompres video
+ffmpeg -i /files/input.mp4 -vcodec libx264 -crf 28 /files/output_compressed.mp4
+
+# Potong video (detik 10 sampai 40)
+ffmpeg -i /files/input.mp4 -ss 10 -to 40 -c copy /files/clip.mp4
+
+# Cek versi FFmpeg (untuk verifikasi)
+ffmpeg -version
+```
+
+> **Tips:** Selalu gunakan path absolut (`/files/...`) di Execute Command Node. Gunakan flag `-y` agar FFmpeg otomatis overwrite output tanpa konfirmasi.
+
+### Manajemen File dari Host
+
+```bash
+# Upload file ke server
+scp video.mp4 user@server:/opt/automator/n8n/media/
+
+# Lihat file di direktori media
+ls -lh /opt/automator/n8n/media/
+
+# Bersihkan file lama
+find /opt/automator/n8n/media/ -mtime +7 -delete
+```
+
+### Verifikasi Instalasi
+
+```bash
+# Cek FFmpeg tersedia di container
+docker exec n8n ffmpeg -version
+docker exec n8n which ffmpeg    # → /usr/bin/ffmpeg
+
+# Cek worker juga punya akses
+docker exec n8n-worker ffmpeg -version
 ```
 
 ## 🛠️ Manajemen Server
@@ -488,6 +567,11 @@ grep -E 'PASSWORD|KEY|TOKEN' .env          # Lihat semua secret
 df -h                                      # Disk
 free -h                                    # RAM + SWAP
 docker system df                           # Storage Docker
+
+# ─── FFmpeg ───────────────────────────────────
+docker exec n8n ffmpeg -version            # Cek versi FFmpeg
+ls -lh media/                              # Daftar file media
+find media/ -mtime +7 -delete             # Hapus file >7 hari
 ```
 
 ## 📜 Lisensi
@@ -496,4 +580,4 @@ MIT License — bebas digunakan untuk proyek personal maupun komersial.
 
 ---
 
-*n8n Universal Auto-Install v4.0 — dioptimasi untuk n8n 2.20.x, Mei 2026*
+*n8n Universal Auto-Install v4.0 — dioptimasi untuk n8n 2.20.x, Mei 2026 · FFmpeg built-in*

@@ -318,13 +318,15 @@ log_ok "Docker Compose: $(docker compose version --short)"
 # ============================================================
 log_step "4/11 · Creating project structure"
 
-mkdir -p "$INSTALL_DIR"/{bot,logs,backups,shims,n8n-files,data}
+mkdir -p "$INSTALL_DIR"/{bot,logs,backups,shims,n8n-files,data,media}
 
 # Permissions for n8n (UID 1000 = node user in container)
 chown -R 1000:1000 "$INSTALL_DIR/n8n-files"
 chown -R 1000:1000 "$INSTALL_DIR/data"
+chown -R 1000:1000 "$INSTALL_DIR/media"
 chmod -R u+rwX,g+rwX "$INSTALL_DIR/n8n-files"
 chmod -R u+rwX,g+rwX "$INSTALL_DIR/data"
+chmod -R u+rwX,g+rwX "$INSTALL_DIR/media"
 
 log_ok "Structure created: $INSTALL_DIR"
 
@@ -371,7 +373,8 @@ N8N_PROXY_HOPS=1
 # Execute Command and Local File Trigger allowed
 NODES_EXCLUDE=[]
 # Whitelist of paths for Read/Write Binary Files
-N8N_RESTRICT_FILE_ACCESS_TO="/home/node/.n8n-files;/data"
+# /files = dedicated media dir for FFmpeg input/output (host: $INSTALL_DIR/media)
+N8N_RESTRICT_FILE_ACCESS_TO="/home/node/.n8n-files;/data;/files"
 # Offload manual executions to workers (recommended for scaling mode)
 OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS=true
 
@@ -473,6 +476,13 @@ RUN set -eux; \
 # ─── npm config ─────────────────────────────────────────────
 RUN npm config set fund false && npm config set audit false
 
+# ─── FFmpeg ──────────────────────────────────────────────────
+# Install via Alpine apk → auto-resolves all shared libs (libavcodec etc)
+# Binary lands at /usr/bin/ffmpeg — already on PATH, no extra config needed
+# File staging: host ./media/ ↔ container /files/ (see docker-compose volumes)
+RUN apk add --no-cache ffmpeg && \
+    ffmpeg -version 2>&1 | head -1
+
 # ─── npm global packages ──────────────────────────────────
 RUN for pkg in \
     axios node-fetch form-data \
@@ -568,6 +578,7 @@ x-n8n-volumes: &n8n-volumes
   - ./logs:/logs
   - ./n8n-files:/home/node/.n8n-files
   - ./data:/data
+  - ./media:/files
 
 services:
   # ──────────────────────────────────────────────────────────
@@ -1318,6 +1329,8 @@ printf  "${GREEN}${BOLD}│${NC}  %-20s %-31s ${GREEN}${BOLD}│${NC}\n" "📦 n
 printf  "${GREEN}${BOLD}│${NC}  %-20s %-31s ${GREEN}${BOLD}│${NC}\n" "🗄  PostgreSQL" "16"
 printf  "${GREEN}${BOLD}│${NC}  %-20s %-31s ${GREEN}${BOLD}│${NC}\n" "⚡ Redis" "8"
 printf  "${GREEN}${BOLD}│${NC}  %-20s %-31s ${GREEN}${BOLD}│${NC}\n" "🔒 Traefik" "v3"
+printf  "${GREEN}${BOLD}│${NC}  %-20s %-31s ${GREEN}${BOLD}│${NC}\n" "🎬 FFmpeg" "Alpine (built-in)"
+printf  "${GREEN}${BOLD}│${NC}  %-20s %-31s ${GREEN}${BOLD}│${NC}\n" "📁 Media dir" "${INSTALL_DIR}/media"
 printf  "${GREEN}${BOLD}│${NC}  %-20s %-31s ${GREEN}${BOLD}│${NC}\n" "🖥  Server IP" "${PUBLIC_IP}"
 printf  "${GREEN}${BOLD}│${NC}  %-20s %-31s ${GREEN}${BOLD}│${NC}\n" "⏱  Total time" "${ELAPSED_FMT}"
 echo -e "${GREEN}${BOLD}├──────────────────────────────────────────────────────┤${NC}"

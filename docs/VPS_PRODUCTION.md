@@ -570,6 +570,14 @@ crontab -l 2>/dev/null | grep -q "check_disk" && echo "✅" || echo "❌ — jal
 echo -n "[SWAP]   SWAP configured: "
 swapon --show | grep -q "/" && echo "✅" || echo "❌ — install.sh seharusnya sudah set ini"
 
+# 12. FFmpeg tersedia di container n8n
+echo -n "[FFMPEG] FFmpeg di container n8n: "
+docker exec n8n ffmpeg -version &>/dev/null && echo "✅ ($(docker exec n8n ffmpeg -version 2>&1 | head -1 | awk '{print $3}'))" || echo "❌ — rebuild image: cd /opt/automator/n8n && docker compose build --no-cache n8n"
+
+# 13. Direktori media tersedia
+echo -n "[MEDIA]  Direktori media (/files): "
+[[ -d /opt/automator/n8n/media ]] && echo "✅ (/opt/automator/n8n/media)" || echo "❌ — mkdir -p /opt/automator/n8n/media && chown 1000:1000 /opt/automator/n8n/media"
+
 echo ""
 echo "=== Selesai ==="
 ```
@@ -593,9 +601,10 @@ bash /opt/automator/n8n/check_production.sh
 | Redis | 8.6.3 |
 | Traefik | v3 |
 | PostgreSQL | 16 |
+| FFmpeg | Alpine (latest) |
 | Docker | 29.5.0 |
 | Ubuntu | 24.04 LTS |
 
 ---
 
-*Panduan ini adalah pelengkap dari `install.sh` v4.0.*
+*Panduan ini adalah pelengkap dari `install.sh` v4.0 — termasuk FFmpeg built-in.*
