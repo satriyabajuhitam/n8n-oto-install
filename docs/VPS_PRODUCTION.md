@@ -24,63 +24,76 @@ Panduan ini melengkapi `install.sh` dengan langkah-langkah keamanan tambahan unt
 
 ## 1. Hardening SSH
 
-Pilih salah satu cara membuat dan mendaftarkan SSH key:
+> **Konteks:** Kamu sudah bisa akses VPS sebagai `root` via SSH dengan password. Langkah ini menambahkan SSH key ke `root`, lalu menonaktifkan login password agar akses hanya bisa lewat key.
 
----
+### Step 1 — Siapkan SSH Key di komputer lokal
 
-### Opsi A — Terminal / CLI
-
-**Buat SSH Key (di komputer lokal):**
+**Jika belum punya SSH key**, buat dulu:
 
 ```bash
+# Di komputer lokal (bukan VPS)
 ssh-keygen -t ed25519 -C "vps-n8n" -f ~/.ssh/n8n_vps
 ```
 
-**Copy Public Key ke VPS:**
+**Jika sudah punya SSH key**, lewati langkah ini dan lanjut ke Step 2.
+
+---
+
+### Step 2 — Daftarkan Public Key ke root di VPS
+
+Pilih salah satu cara:
+
+#### Opsi A — Terminal / CLI (dari komputer lokal)
 
 ```bash
+# Otomatis copy public key ke root@VPS
 ssh-copy-id -i ~/.ssh/n8n_vps.pub root@<IP_VPS>
 ```
 
----
-
-### Opsi B — Termius
-
-**Langkah 1 — Buat key di Termius:**
-
-1. Buka Termius → menu **Keychain** (ikon kunci di sidebar)
-2. Klik **+ New Key**
-3. Pilih tipe: `Ed25519`
-4. Beri nama: `vps-n8n`
-5. Klik **Generate** → key tersimpan di Keychain Termius
-
-**Langkah 2 — Salin Public Key:**
-
-1. Di Keychain, klik key yang baru dibuat
-2. Klik **Copy Public Key** (atau ikon copy di sebelah public key)
-
-**Langkah 3 — Daftarkan ke VPS:**
-
-Login ke VPS (masih dengan password), lalu jalankan:
+Atau manual jika `ssh-copy-id` tidak tersedia:
 
 ```bash
-mkdir -p ~/.ssh && chmod 700 ~/.ssh
+# Tampilkan public key di lokal
+cat ~/.ssh/n8n_vps.pub
 
-# Paste public key dari Termius
-echo "PASTE_PUBLIC_KEY_DI_SINI" >> ~/.ssh/authorized_keys
-
-chmod 600 ~/.ssh/authorized_keys
+# Lalu di sesi VPS yang sedang aktif:
+mkdir -p /root/.ssh && chmod 700 /root/.ssh
+echo "PASTE_PUBLIC_KEY_DI_SINI" >> /root/.ssh/authorized_keys
+chmod 600 /root/.ssh/authorized_keys
 ```
 
-**Langkah 4 — Konfigurasi host di Termius:**
+#### Opsi B — Termius
 
-1. Buka host VPS di Termius → **Edit**
-2. Pada bagian **Keys** → pilih key `vps-n8n` yang sudah dibuat
-3. Simpan dan coba koneksi — harus berhasil tanpa password
+1. Buka Termius → **Keychain** → **+ New Key** → tipe `Ed25519` → beri nama `vps-n8n` → **Generate**
+2. Klik key tersebut → **Copy Public Key**
+3. Di sesi VPS yang sedang aktif, jalankan:
+
+```bash
+mkdir -p /root/.ssh && chmod 700 /root/.ssh
+echo "PASTE_PUBLIC_KEY_DI_SINI" >> /root/.ssh/authorized_keys
+chmod 600 /root/.ssh/authorized_keys
+```
+
+4. Kembali ke Termius → Edit host VPS → bagian **Keys** → pilih key `vps-n8n` → simpan
 
 ---
 
-### Konfigurasi SSH Server (berlaku untuk kedua opsi)
+### Step 3 — Verifikasi login dengan key SEBELUM disable password
+
+**Buka tab / sesi baru** (jangan tutup sesi yang sekarang), lalu coba login:
+
+```bash
+# Terminal
+ssh -i ~/.ssh/n8n_vps root@<IP_VPS>
+
+# Termius: connect ke host VPS menggunakan key yang sudah dikonfigurasi
+```
+
+Pastikan berhasil masuk **tanpa diminta password** sebelum lanjut ke Step 4.
+
+---
+
+### Step 4 — Disable login password (setelah key terkonfirmasi)
 
 ```bash
 nano /etc/ssh/sshd_config
@@ -93,7 +106,7 @@ Ubah / tambahkan baris berikut:
 PasswordAuthentication no
 ChallengeResponseAuthentication no
 
-# Nonaktifkan root login via password (izinkan key saja)
+# Root hanya boleh login via key
 PermitRootLogin prohibit-password
 
 # Batasi percobaan login
@@ -110,16 +123,11 @@ AllowAgentForwarding no
 AllowTcpForwarding no
 ```
 
-Restart SSH:
-
 ```bash
 systemctl restart ssh
 ```
 
-> ⚠️ **Jangan tutup sesi yang sedang aktif** sebelum memastikan login dengan key berhasil dari sesi/tab baru:
-> - **Terminal:** `ssh -i ~/.ssh/n8n_vps root@<IP_VPS>`
-> - **Termius:** buka tab baru → connect ke host VPS
-
+> ⚠️ **Jika kamu terkunci** (tidak bisa masuk setelah restart), gunakan VNC/console dari panel VPS provider untuk re-enable `PasswordAuthentication yes` sementara.
 
 ---
 
