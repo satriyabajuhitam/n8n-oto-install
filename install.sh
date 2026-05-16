@@ -3,10 +3,9 @@
 # n8n Universal Auto-Install Script v4.0
 # Clean installation on Ubuntu 22.04 / 24.04
 # ============================================================
-# Components: n8n 2.x + PostgreSQL 16 + Redis 7 + Traefik v3
+# Components: n8n 2.x + PostgreSQL 16 + Redis 8 + Traefik v3
 #             + Telegram Bot
-#             + FFmpeg + Python3 + Chromium + Tesseract OCR
-#             + 30+ npm-libraries for AI/ML/automation
+#             + 17 npm-libraries for AI/ML/automation
 # ============================================================
 
 set -euo pipefail
@@ -109,7 +108,7 @@ cat << 'BANNER'
 BANNER
 echo -e "${NC}"
 echo -e "${BOLD}    Universal Auto-Install v4.0${NC}"
-echo -e "    n8n 2.x + PostgreSQL + Redis + Traefik SSL + Telegram Bot"
+echo -e "    n8n 2.x + PostgreSQL 16 + Redis 8 + Traefik v3 SSL + Telegram Bot + Worker"
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
@@ -117,7 +116,7 @@ echo ""
 # ============================================================
 # INPUT DATA
 # ============================================================
-log_step "Configuration  ─  Step 0/11"
+log_step "Configuration"
 
 # ── Number of input steps ──
 INPUT_STEPS=5
