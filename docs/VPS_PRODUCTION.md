@@ -328,18 +328,44 @@ docker compose down && docker compose up -d
 
 ### Buat non-root user untuk SSH (opsional tapi disarankan)
 
+> ⚠️ **Penting:** Setelah membuat user `deployer`, jalankan **semua langkah di bawah** — termasuk set password dan fix permission `.env`. Tanpa ini, `docker compose` akan gagal dengan error `permission denied` saat membaca `.env`.
+
 ```bash
-adduser --disabled-password --gecos "" deployer
+# 1. Buat user deployer
+adduser --gecos "" deployer
+# → Kamu AKAN diminta mengisi password. Isi dengan password yang kuat.
+# (Jika sudah terlanjur pakai --disabled-password dan perlu set password:
+#  sudo passwd deployer)
+
+# 2. Tambahkan ke grup sudo dan docker
 usermod -aG sudo deployer
 usermod -aG docker deployer
 
-# Copy authorized keys dari root
+# 3. Copy authorized keys dari root (untuk SSH key login)
 mkdir -p /home/deployer/.ssh
 cp /root/.ssh/authorized_keys /home/deployer/.ssh/
 chown -R deployer:deployer /home/deployer/.ssh
 chmod 700 /home/deployer/.ssh
 chmod 600 /home/deployer/.ssh/authorized_keys
+
+# 4. Fix permission .env — WAJIB agar deployer bisa menjalankan docker compose
+#    install.sh membuat .env dengan chmod 600 (hanya root),
+#    perbaiki agar group docker (yang deployer sudah bergabung) bisa membaca:
+chown root:docker /opt/automator/n8n/.env
+chmod 640 /opt/automator/n8n/.env
+
+# 5. Verifikasi — login ulang dulu agar keanggotaan grup docker aktif
+# (gunakan sesi SSH baru sebagai deployer)
+groups deployer
+# Output harus mencantumkan: deployer sudo docker
 ```
+
+> **Catatan SSH-only (tanpa password login):** Jika kamu ingin user `deployer` hanya bisa login via SSH key (tidak bisa `su deployer` dengan password), gunakan:
+> ```bash
+> adduser --disabled-password --gecos "" deployer
+> # Tidak perlu passwd — lanjut langsung ke langkah 2–5 di atas
+> ```
+> Namun kamu **tetap harus menjalankan langkah 4 (fix .env)** agar docker compose bisa dijalankan.
 
 ---
 

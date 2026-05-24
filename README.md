@@ -129,6 +129,8 @@ cd /opt/automator/n8n
 grep -E 'PASSWORD|KEY|TOKEN' .env
 ```
 
+> **Permission `.env`:** File `.env` dibuat dengan permission `root:docker 640`. Pastikan user kamu tergabung dalam grup `docker` agar bisa membaca file ini langsung. Jika menggunakan user `root`, bisa langsung tanpa masalah.
+
 ## 🤖 Telegram Bot
 
 ### Setup
@@ -363,10 +365,13 @@ Script otomatis:
 1. Cek versi saat ini vs latest
 2. Buat backup
 3. Stop n8n + worker
-4. Rebuild image dengan `--pull` (base image n8n terbaru)
-5. Jalankan kembali
-6. Verifikasi healthcheck
-7. Bersihkan image lama
+4. Pull base image n8n terbaru dari `docker.n8n.io` (bukan Docker Hub)
+5. Rebuild image dari cache lokal (tidak kena rate limit)
+6. Jalankan kembali
+7. Verifikasi healthcheck
+8. Bersihkan image lama
+
+> **Catatan:** Script update menggunakan `docker pull docker.n8n.io/n8nio/n8n:latest` secara selektif, bukan `docker compose build --pull`. Ini menghindari error `429 Too Many Requests` akibat Docker Hub unauthenticated pull rate limit.
 
 ## 💾 Backup & Restore
 
@@ -487,6 +492,47 @@ docker compose logs n8n-bot --tail 20
 grep TG_ /opt/automator/n8n/.env
 docker compose restart n8n-bot
 ```
+
+### Update gagal: `429 Too Many Requests` (Docker Hub rate limit)
+
+Terjadi saat server terkena batas pull Docker Hub (100 pull/6 jam per IP untuk unauthenticated).
+
+```bash
+# Opsi 1 — Pull hanya base image n8n (tidak kena rate limit), lalu build manual
+cd /opt/automator/n8n
+docker pull docker.n8n.io/n8nio/n8n:latest
+docker compose build n8n
+docker compose up -d n8n n8n-worker
+
+# Opsi 2 — Login Docker Hub (limit jadi 200 pull/6 jam)
+docker login
+# lalu jalankan: ./update_n8n.sh
+
+# Opsi 3 — Tunggu reset rate limit (6 jam) lalu jalankan ./update_n8n.sh
+```
+
+> Script `update_n8n.sh` sudah menggunakan pendekatan Opsi 1 secara otomatis.
+
+### `permission denied` saat `docker compose build` / membaca `.env`
+
+Terjadi jika menjalankan docker compose sebagai user non-root yang belum ada di grup `docker`, atau belum ada permission baca pada `.env`.
+
+```bash
+# Sebagai root: fix permission .env
+chown root:docker /opt/automator/n8n/.env
+chmod 640 /opt/automator/n8n/.env
+
+# Tambahkan user ke grup docker (ganti 'deployer' dengan nama user kamu)
+usermod -aG docker deployer
+
+# Set password user jika dibuat dengan --disabled-password
+passwd deployer
+
+# Login ulang agar keanggotaan grup aktif (buka sesi SSH baru)
+# Verifikasi:
+groups   # harus ada: deployer sudo docker
+```
+
 
 ### Kehabisan memori (OOM)
 

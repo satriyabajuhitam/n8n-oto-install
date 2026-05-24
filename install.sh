@@ -425,8 +425,10 @@ QUEUE_BULL_REDIS_PORT=6379
 QUEUE_BULL_REDIS_PASSWORD=${REDIS_PASSWORD}
 ENVEOF
 
-chmod 600 "$INSTALL_DIR/.env"
-log_ok ".env created"
+# group docker agar user non-root di grup docker (mis: deployer) bisa membaca
+chown root:docker "$INSTALL_DIR/.env"
+chmod 640 "$INSTALL_DIR/.env"
+log_ok ".env created (root:docker 640)"
 
 # ============================================================
 # 6. DOCKERFILE.N8N
@@ -957,8 +959,16 @@ bot.onText(/\/update/, async (msg) => {
         // Use 'cd' into N8N_DIR instead of '-f' flag (avoids V1/V2 compat issue)
         await run(`cd ${N8N_DIR} && ${DC} stop n8n n8n-worker`, 60000);
 
+        // Pull HANYA base image n8n dari docker.n8n.io (bukan --pull yang menarik
+        // alpine dari Docker Hub juga → menyebabkan 429 rate limit)
+        await bot.sendMessage(cid, '⬇️ Pulling latest n8n image...');
+        await run('docker pull docker.n8n.io/n8nio/n8n:latest', 300000).catch(e => {
+            console.error('[update] pull warning:', e.message);
+        });
+
         await bot.sendMessage(cid, '🔨 Rebuilding (5-10 min)...');
-        await run(`cd ${N8N_DIR} && ${DC} build --pull n8n`, 900000);
+        const buildResult = await run(`cd ${N8N_DIR} && ${DC} build n8n`, 900000).catch(e => { throw e; });
+        console.log('[update] build output:', buildResult.substring(0, 500));
 
         await bot.sendMessage(cid, '🚀 Starting...');
         await run(`cd ${N8N_DIR} && ${DC} up -d n8n n8n-worker`, 120000);
@@ -1111,8 +1121,14 @@ echo "Backing up..."
 echo "Stopping..."
 docker compose stop n8n n8n-worker
 
+# Pull hanya base image n8n dari registry resmi (docker.n8n.io),
+# BUKAN --pull di docker compose build (itu menarik SEMUA base image
+# termasuk alpine:3.21 dari Docker Hub → memicu rate limit 429).
+echo "Pulling latest n8n base image..."
+docker pull docker.n8n.io/n8nio/n8n:latest 2>&1 | grep -E '(Pull|Digest|Status|error)' || true
+
 echo "Rebuilding..."
-docker compose build --pull n8n
+docker compose build n8n
 
 echo "Starting..."
 docker compose up -d n8n n8n-worker
